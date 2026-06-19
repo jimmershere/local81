@@ -26,6 +26,7 @@ from typing import Mapping, Protocol, runtime_checkable
 
 from .models import CommandResult
 from .runner import run_local, run_remote
+from .ssh import SshOptions
 
 # Inventory prefixes that select a connector type, pyinfra-style.
 _LOCAL_ALIASES = {"@local", "local"}
@@ -109,9 +110,12 @@ class LocalConnector:
 class SshConnector:
     """Runs commands over SSH; transfers files with rsync."""
 
-    def __init__(self, host: str, *, ssh_bin: str = "ssh", rsync_bin: str = "rsync", rsync_opts: str = "-az") -> None:
+    def __init__(self, host: str, *, ssh_bin: str = "ssh", rsync_bin: str = "rsync", rsync_opts: str = "-az",
+                 ssh_opts: SshOptions | None = None) -> None:
         self.name = host
-        self._host = host
+        self._ssh_opts = ssh_opts or SshOptions()
+        # The host as ssh/rsync should address it (user@host when configured).
+        self._host = self._ssh_opts.host_for(host)
         self._ssh_bin = ssh_bin
         self._rsync_bin = rsync_bin
         self._rsync_opts = rsync_opts
@@ -131,15 +135,18 @@ class SshConnector:
             self._host,
             remote,
             ssh_bin=self._ssh_bin,
+            ssh_args=self._ssh_opts.ssh_args(),
             timeout_seconds=timeout_seconds,
         )
 
     def put(self, local_path: str, remote_path: str, *, recursive: bool = False) -> CommandResult:
-        argv = [self._rsync_bin, *shlex.split(self._rsync_opts), "--", local_path, f"{self._host}:{remote_path}"]
+        argv = [self._rsync_bin, *shlex.split(self._rsync_opts), *self._ssh_opts.rsync_transport(),
+                "--", local_path, f"{self._host}:{remote_path}"]
         return run_local(argv)
 
     def get(self, remote_path: str, local_path: str, *, recursive: bool = False) -> CommandResult:
-        argv = [self._rsync_bin, *shlex.split(self._rsync_opts), "--", f"{self._host}:{remote_path}", local_path]
+        argv = [self._rsync_bin, *shlex.split(self._rsync_opts), *self._ssh_opts.rsync_transport(),
+                "--", f"{self._host}:{remote_path}", local_path]
         return run_local(argv)
 
     def close(self) -> None:
@@ -187,16 +194,21 @@ class DockerConnector:
         return None
 
 
-def connector_for_target(target: str | None, *, rsync_opts: str = "-az") -> Connector:
+def connector_for_target(target: str | None, *, rsync_opts: str = "-az",
+                         ssh_opts: SshOptions | None = None) -> Connector:
     """Resolve an inventory target string to a connector.
 
     * ``None``, ``@local``, ``local`` -> :class:`LocalConnector`
     * ``@docker/<name>``              -> :class:`DockerConnector`
     * anything else                   -> :class:`SshConnector` (the hostname)
+
+    ``ssh_opts`` (from the ``[ssh]`` config section) pins the user, port,
+    identity file and host-key policy on the SSH path; it is ignored for the
+    local and docker connectors.
     """
     if target is None or target in _LOCAL_ALIASES:
         return LocalConnector()
     if target.startswith(_DOCKER_PREFIX):
         container = target[len(_DOCKER_PREFIX):]
         return DockerConnector(container)
-    return SshConnector(target, rsync_opts=rsync_opts)
+    return SshConnector(target, rsync_opts=rsync_opts, ssh_opts=ssh_opts)
