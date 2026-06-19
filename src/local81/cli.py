@@ -22,6 +22,7 @@ from .commands.pull_logs import run_pull_logs
 from .commands.rollback import run_rollback
 from .commands.schedule import run_schedule
 from .commands.status import run_status
+from .commands.ui import run_ui
 
 def print_command_reference() -> None:
     print(
@@ -45,6 +46,7 @@ def print_command_reference() -> None:
   local81 schedule <add|list|remove|doctor> [options]
   local81 rollback RUN_ID [--execute]
   local81 gc [--keep N] [--max-age-days D] [--execute]
+  local81 ui semaphore-render --db-host HOST --db-password-ref REF [--key-custody local81|vault|semaphore]
   local81 help"""
     )
 
@@ -207,6 +209,25 @@ def build_parser() -> argparse.ArgumentParser:
     rollback.add_argument("run_id", help="Run ID (exact or prefix) to roll back.")
     rollback.add_argument("--execute", action="store_true", help="Apply the rollback; without it, only show the plan.")
 
+    ui = sub.add_parser("ui", help="Render config for an external web UI (Semaphore) that fronts the local81 CLI.")
+    ui_sub = ui.add_subparsers(dest="ui_command", required=True)
+    sema = ui_sub.add_parser("semaphore-render", help="Render Semaphore project/template config (PostgreSQL 17, TLS).")
+    sema.add_argument("--db-host", dest="db_host", default=None, help="PostgreSQL 17 host for Semaphore's backing store.")
+    sema.add_argument("--db-port", dest="db_port", type=int, default=5432)
+    sema.add_argument("--db-name", dest="db_name", default="semaphore")
+    sema.add_argument("--db-user", dest="db_user", default="semaphore")
+    sema.add_argument("--db-sslmode", dest="db_sslmode", default="verify-full",
+                      choices=("disable", "require", "verify-ca", "verify-full"))
+    sema.add_argument("--db-password-ref", dest="db_password_ref", default=None,
+                      help="Secret reference (env://, bao://, delinea://, ...) for the DB password. Never a literal.")
+    sema.add_argument("--key-custody", dest="key_custody", default="local81",
+                      choices=("local81", "vault", "semaphore"),
+                      help="Who holds target SSH creds: local81 (default, thin), vault, or semaphore (native KeyStore).")
+    sema.add_argument("--accept-key-custody", dest="accept_key_custody", action="store_true",
+                      help="Required to use --key-custody semaphore; acknowledges target creds at rest (raises L26-UI-001).")
+    sema.add_argument("--local81-bin", dest="local81_bin", default="local81")
+    sema.add_argument("--out-dir", dest="out_dir", default=None)
+
     gc = sub.add_parser("gc", help="Prune old run directories under .local81/runs/ by count and/or age.")
     gc.add_argument("--keep", type=int, default=None, help="Keep the newest N run directories.")
     gc.add_argument("--max-age-days", dest="max_age_days", type=int, default=None, help="Remove runs older than D days.")
@@ -271,6 +292,12 @@ def main() -> int:
         return run_schedule(args)
     if args.command == "rollback":
         return run_rollback(args.run_id, execute=args.execute)
+    if args.command == "ui":
+        return run_ui(args.ui_command, db_host=args.db_host, db_password_ref=args.db_password_ref,
+                      db_port=args.db_port, db_name=args.db_name, db_user=args.db_user,
+                      db_sslmode=args.db_sslmode, key_custody=args.key_custody,
+                      accept_key_custody=args.accept_key_custody, local81_bin=args.local81_bin,
+                      out_dir=args.out_dir)
     if args.command == "gc":
         return run_gc(keep=args.keep, max_age_days=args.max_age_days, execute=args.execute)
     parser.error(f"unsupported command: {args.command}")

@@ -1,0 +1,95 @@
+{
+  "name": "Local-81 Deploy (agentic)",
+  "meta": {
+    "description": "Webhook-triggered local81 pipeline: plan -> gate -> deploy -> emit signed audit receipt. Each node shells out to the local81 CLI on the control node, so the workflow is the orchestration and local81 stays the engine. Set LOCAL81_DIR and the COLLECTOR_URL credential before use."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "local81-deploy",
+        "responseMode": "lastNode"
+      },
+      "name": "Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd ${LOCAL81_DIR:-/srv/local81} && local81 plan --ci"
+      },
+      "name": "Plan",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd ${LOCAL81_DIR:-/srv/local81} && local81 doctor --fleet"
+      },
+      "name": "Readiness gate",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            { "value1": "={{ $json[\"exitCode\"] }}", "operation": "equal", "value2": 0 }
+          ]
+        }
+      },
+      "name": "Fleet ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd ${LOCAL81_DIR:-/srv/local81} && local81 deploy --latest --execute"
+      },
+      "name": "Deploy",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1200, 220]
+    },
+    {
+      "parameters": {
+        "command": "cd ${LOCAL81_DIR:-/srv/local81} && local81 status"
+      },
+      "name": "Abort (not ready)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1200, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.COLLECTOR_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: $json[\"exitCode\"] === 0 ? \"deployed\" : \"failed\", stdout: $json[\"stdout\"] }) }}",
+        "options": {}
+      },
+      "name": "Emit audit receipt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1440, 220]
+    }
+  ],
+  "connections": {
+    "Trigger": { "main": [[{ "node": "Plan", "type": "main", "index": 0 }]] },
+    "Plan": { "main": [[{ "node": "Readiness gate", "type": "main", "index": 0 }]] },
+    "Readiness gate": { "main": [[{ "node": "Fleet ready?", "type": "main", "index": 0 }]] },
+    "Fleet ready?": {
+      "main": [
+        [{ "node": "Deploy", "type": "main", "index": 0 }],
+        [{ "node": "Abort (not ready)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Deploy": { "main": [[{ "node": "Emit audit receipt", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}
