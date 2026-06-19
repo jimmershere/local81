@@ -126,7 +126,45 @@ def _secrets_checks() -> list[CheckResult]:
     return [CheckResult("PASS", "secrets:refs", f"{ref_count} managed reference(s) parse cleanly")]
 
 
-def run_doctor(plan: str | None = None, profile: str | None = None) -> int:
+def _fleet_checks(profile: str | None) -> list[CheckResult]:
+    """Live, read-only probe of every host in the configured scopes.
+
+    Off by default (network I/O); enabled by ``doctor --fleet``. Confirms each
+    target is key-reachable over SSH and carries python3/rsync/sha256sum — the
+    only things local81 needs on an endpoint.
+    """
+    from local81.onboarding import probe_host
+
+    try:
+        config = load_config(profile=profile)
+    except FileNotFoundError:
+        return [CheckResult("WARN", "fleet:config", "no config; nothing to probe")]
+    ssh_opts = config.ssh_options()
+    hosts: list[str] = []
+    for scope in config.scopes:
+        if not scope.enabled:
+            continue
+        for server in scope.servers:
+            if server and server not in hosts:
+                hosts.append(server)
+    if not hosts:
+        return [CheckResult("WARN", "fleet:hosts", "no servers configured in any scope")]
+    results: list[CheckResult] = []
+    for host in hosts:
+        probe = probe_host(host, ssh_opts)
+        if probe.ready:
+            results.append(CheckResult("PASS", f"fleet:{host}", f"ready — {probe.python3}, {probe.rsync}"))
+        elif probe.key_authed:
+            missing = [n for n, ok in (("python3", probe.python3), ("rsync", probe.rsync), ("sha256sum", probe.sha256sum)) if not ok]
+            results.append(CheckResult("WARN", f"fleet:{host}", f"key OK but missing {', '.join(missing)}"))
+        elif probe.tcp_open:
+            results.append(CheckResult("WARN", f"fleet:{host}", "reachable but not key-authed (run: local81 onboard)"))
+        else:
+            results.append(CheckResult("FAIL", f"fleet:{host}", f"unreachable ({probe.error or 'no tcp/22'})"))
+    return results
+
+
+def run_doctor(plan: str | None = None, profile: str | None = None, fleet: bool = False) -> int:
     checks: list[CheckResult] = [
         _binary_check("bash"),
         _binary_check("python3"),
@@ -147,6 +185,8 @@ def run_doctor(plan: str | None = None, profile: str | None = None) -> int:
         checks.append(CheckResult(finding.level, f"policy:{finding.control}", finding.detail))
     if plan:
         checks.extend(_plan_checks(Path(plan)))
+    if fleet:
+        checks.extend(_fleet_checks(profile))
     passes = [c for c in checks if c.level == "PASS"]
     warns = [c for c in checks if c.level == "WARN"]
     fails = [c for c in checks if c.level == "FAIL"]

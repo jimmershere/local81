@@ -14,7 +14,9 @@ from .commands.guided import run_guided
 from .commands.history import run_history
 from .commands.hooks import run_hooks
 from .commands.init import run_init
+from .commands.keys import run_keys
 from .commands.logs import run_logs
+from .commands.onboard import run_onboard
 from .commands.plan import run_plan
 from .commands.profiles import run_profile_create, run_profiles
 from .commands.pull import run_pull
@@ -27,7 +29,9 @@ def print_command_reference() -> None:
     print(
         """Usage:
   local81 init [--import PATH] [--force] [--project NAME] [--guided]
-  local81 doctor [--plan PATH]
+  local81 doctor [--plan PATH] [--fleet]
+  local81 keys <ensure|check|copy> [--path PATH] [--hosts CSV] [--hosts-file PATH] [--execute]
+  local81 onboard --hosts CSV [--hosts-file PATH] [--path PATH] [--execute]
   local81 db <doctor|inventory|tools|monitor|diag|backup|report|audit> [options]
   local81 compliance <report|inventory|harden-plan> [options]
   local81 status
@@ -65,6 +69,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = sub.add_parser("doctor", help="Check environment and optional plan/config readiness.")
     doctor.add_argument("--plan", default=None)
+    doctor.add_argument("--fleet", action="store_true",
+                        help="Also live-probe each configured host (read-only SSH: reachability + python3/rsync/sha256sum).")
+
+    keys = sub.add_parser("keys", help="Manage the control node's SSH key and authorize it on hosts.")
+    keys_sub = keys.add_subparsers(dest="keys_command", required=True)
+    for keys_command, keys_help in (
+        ("ensure", "Generate an ed25519 keypair if absent (with --execute) and fix perms."),
+        ("check", "Report key presence, permissions, and ssh-agent state."),
+        ("copy", "Authorize the key on hosts via ssh-copy-id (planned unless --execute)."),
+    ):
+        kp = keys_sub.add_parser(keys_command, help=keys_help)
+        kp.add_argument("--path", default=None, help="Private key path (default: [ssh].identity_file or ~/.ssh/id_ed25519).")
+        if keys_command == "ensure":
+            kp.add_argument("--type", dest="key_type", default="ed25519", help="Key type for ssh-keygen.")
+            kp.add_argument("--comment", default=None, help="Key comment.")
+            kp.add_argument("--execute", action="store_true", help="Actually generate the key.")
+        if keys_command == "copy":
+            kp.add_argument("--hosts", default=None, help="Comma-separated hosts/IPs.")
+            kp.add_argument("--hosts-file", dest="hosts_file", default=None, help="File of hosts, one per line.")
+            kp.add_argument("--execute", action="store_true", help="Actually run ssh-copy-id.")
+
+    onboard = sub.add_parser("onboard", help="Bring a fleet to a deployable state: key -> ssh-copy-id -> uptime/tooling sweep.")
+    onboard.add_argument("--hosts", default=None, help="Comma-separated hosts/IPs.")
+    onboard.add_argument("--hosts-file", dest="hosts_file", default=None, help="File of hosts, one per line.")
+    onboard.add_argument("--path", default=None, help="Private key path (default: [ssh].identity_file or ~/.ssh/id_ed25519).")
+    onboard.add_argument("--type", dest="key_type", default="ed25519", help="Key type for ssh-keygen.")
+    onboard.add_argument("--connect-timeout", dest="connect_timeout", type=int, default=5, help="Per-host SSH connect timeout (seconds).")
+    onboard.add_argument("--execute", action="store_true", help="Generate/copy keys; without it, plan + read-only sweep only.")
 
     db = sub.add_parser("db", help="Run database readiness, diagnostic, backup-plan, and audit helpers.")
     db_sub = db.add_subparsers(dest="db_command", required=True)
@@ -226,7 +258,19 @@ def main() -> int:
             return run_guided(force=args.force)
         return run_init(import_path=args.import_path, force=args.force, project=args.project)
     if args.command == "doctor":
-        return run_doctor(plan=args.plan, profile=args.profile)
+        return run_doctor(plan=args.plan, profile=args.profile, fleet=args.fleet)
+    if args.command == "keys":
+        return run_keys(args.keys_command, path=args.path,
+                        key_type=getattr(args, "key_type", "ed25519"),
+                        comment=getattr(args, "comment", None),
+                        hosts=getattr(args, "hosts", None),
+                        hosts_file=getattr(args, "hosts_file", None),
+                        execute=getattr(args, "execute", False),
+                        profile=args.profile)
+    if args.command == "onboard":
+        return run_onboard(hosts=args.hosts, hosts_file=args.hosts_file, path=args.path,
+                           key_type=args.key_type, connect_timeout=args.connect_timeout,
+                           execute=args.execute, profile=args.profile)
     if args.command == "db":
         return run_db(args)
     if args.command == "compliance":
