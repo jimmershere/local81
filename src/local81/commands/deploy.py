@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import hashlib
 import json
 import shutil
 import subprocess
@@ -88,6 +89,38 @@ def _write_json(path: Path, payload: dict, *, scrub=_no_scrub) -> None:
     # stdout/stderr/cmd) regardless of structure — secrets never at rest.
     path.write_text(scrub(json.dumps(payload, separators=(",", ":"))), encoding="utf-8")
     path.chmod(0o600)
+
+
+def _record_run_in_ledger(*, run_id: str, plan_id, rc: int, dry_run: bool,
+                          finished_at: str, steps: int, hosts: int, run_json: Path) -> None:
+    """Append an immutable, content-addressed run summary to the audit ledger.
+
+    Best-effort: a ledger failure must never fail an otherwise-good deploy. The
+    event carries the SHA-256 of the (already-scrubbed) run.json, so the ledger
+    indexes the artifact without duplicating — or leaking — its contents.
+    """
+    try:
+        from local81 import ledger
+
+        try:
+            run_sha = hashlib.sha256(run_json.read_bytes()).hexdigest()
+        except OSError:
+            run_sha = None
+        ledger.append_event(
+            {
+                "kind": "deploy_run",
+                "run_id": run_id,
+                "plan_id": plan_id,
+                "rc": rc,
+                "dry_run": dry_run,
+                "steps": steps,
+                "hosts": hosts,
+                "run_json_sha256": run_sha,
+            },
+            ts=finished_at,
+        )
+    except Exception:  # noqa: BLE001 - the audit trail is additive, never load-bearing
+        pass
 
 
 def _update_scope_state(scope_name: str, *, plan_id: str | None, run_id: str, rc: int, deployed_files: int, scrub=_no_scrub) -> None:
@@ -837,6 +870,9 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
     if host_results:
         payload["hosts"] = host_results
     _write_json(run_json, payload, scrub=scrub)
+    _record_run_in_ledger(run_id=run_id, plan_id=plan_data.get("plan_id"), rc=overall_rc,
+                          dry_run=dry_run, finished_at=payload["finished_at"],
+                          steps=len(all_steps), hosts=len(host_results), run_json=run_json)
     event = NotificationEvent(host=",".join(hr["host"] for hr in host_results) if host_results else (scope or scopes[0].get("scope", "local")), status="success" if overall_rc == 0 else "failed", duration_seconds=duration, errors=[scrub(s["stderr"]) for s in all_steps if s.get("stderr") and s.get("rc") not in (0, -1)], run_id=run_id, plan_id=plan_data.get("plan_id"), scope=scope)
     _maybe_notify(notification_warnings, notifications_cfg, quiet=quiet, force=notify, event=event)
     post_rc, post_out, post_err = run_hook("post-deploy.sh", env={**hook_env, "LOCAL81_DEPLOY_RC": str(overall_rc)})

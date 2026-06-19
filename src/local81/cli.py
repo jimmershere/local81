@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .commands.audit import run_audit
 from .commands.compliance import run_compliance
 from .commands.db import run_db
 from .commands.deploy import run_deploy
@@ -50,6 +51,7 @@ def print_command_reference() -> None:
   local81 schedule <add|list|remove|doctor> [options]
   local81 rollback RUN_ID [--execute]
   local81 gc [--keep N] [--max-age-days D] [--execute]
+  local81 audit <verify|root|show|prove|emit> [--run-id ID] [--to URL] [--hmac-key-ref REF]
   local81 ui semaphore-render --db-host HOST --db-password-ref REF [--key-custody local81|vault|semaphore]
   local81 help"""
     )
@@ -241,6 +243,22 @@ def build_parser() -> argparse.ArgumentParser:
     rollback.add_argument("run_id", help="Run ID (exact or prefix) to roll back.")
     rollback.add_argument("--execute", action="store_true", help="Apply the rollback; without it, only show the plan.")
 
+    audit = sub.add_parser("audit", help="Operate on the immutable Merkle audit ledger (verify/prove/root/emit).")
+    audit_sub = audit.add_subparsers(dest="audit_command", required=True)
+    audit_sub.add_parser("verify", help="Recompute the hash chain + Merkle root and report any tampering.")
+    audit_sub.add_parser("root", help="Print the Merkle root, chain head, and entry count.")
+    a_show = audit_sub.add_parser("show", help="Print the most recent ledger entries.")
+    a_show.add_argument("--limit", type=int, default=10)
+    a_prove = audit_sub.add_parser("prove", help="Emit and verify an inclusion proof for one run/entry.")
+    a_prove.add_argument("--run-id", dest="run_id", default=None)
+    a_prove.add_argument("--seq", type=int, default=None)
+    a_emit = audit_sub.add_parser("emit", help="POST a signed receipt (root/head/count) to a collector over HTTPS.")
+    a_emit.add_argument("--to", dest="to_url", required=True, help="Collector URL (https).")
+    a_emit.add_argument("--dry-run", action="store_true", help="Print the receipt instead of sending it.")
+    for ap in (audit_sub.choices["verify"], a_emit):
+        ap.add_argument("--hmac-key-ref", dest="hmac_key_ref", default=None,
+                        help="Secret reference (env://, delinea://, ...) for the HMAC signing key.")
+
     ui = sub.add_parser("ui", help="Render config for an external web UI (Semaphore) that fronts the local81 CLI.")
     ui_sub = ui.add_subparsers(dest="ui_command", required=True)
     sema = ui_sub.add_parser("semaphore-render", help="Render Semaphore project/template config (PostgreSQL 17, TLS).")
@@ -336,6 +354,11 @@ def main() -> int:
         return run_schedule(args)
     if args.command == "rollback":
         return run_rollback(args.run_id, execute=args.execute)
+    if args.command == "audit":
+        return run_audit(args.audit_command,
+                         run_id=getattr(args, "run_id", None), seq=getattr(args, "seq", None),
+                         to_url=getattr(args, "to_url", None), hmac_key_ref=getattr(args, "hmac_key_ref", None),
+                         limit=getattr(args, "limit", 10), dry_run=getattr(args, "dry_run", False))
     if args.command == "ui":
         return run_ui(args.ui_command, db_host=args.db_host, db_password_ref=args.db_password_ref,
                       db_port=args.db_port, db_name=args.db_name, db_user=args.db_user,
