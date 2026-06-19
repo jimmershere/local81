@@ -1,5 +1,5 @@
 # Local-81
-![Local-81 IT operators union seal](docs/assets/local81-logo.png)
+![Local 81 — Fully Baked Orchestration. Clem the operator mascot on a Traverse City beachhead. Powered by Portwright.io — Built in Port, Proven at Sea.](docs/assets/local81-emblem.png)
 
 [![CI](https://github.com/jimmershere/local81/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmershere/local81/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -7,7 +7,24 @@
 
 **Operators’ Local-81 — plan, deploy, audit, hold the line.**
 
-Local-81 is a lean, operator-readable deployment and runbook control plane for file sync, plan generation, deploy execution, diagnostics, and security-conscious operator workflows.
+Local-81 is a lean, operator-readable deployment and runbook control plane: push-based over plain **SSH + rsync** with **no agent or daemon on your hosts**. Onboard a fleet, plan, deploy, repair, and prove every run with a tamper-evident Merkle audit ledger.
+
+## See it run — the BAR Exam
+
+A live, run-it-on-your-own-hardware stress test: Local-81 manages **10 heterogeneous Linux endpoints** — onboard them, deploy a release to all ten, break two on purpose, converge them back, and prove every run with the audit ledger.
+
+**▶ Live demo & captured run — [portwright.io/local81](https://portwright.io/local81)**
+
+Every panel on that page is real captured output (5–10s clips): deploy to ten hosts over SSH+rsync, drift detection & repair, and `audit verify` / `prove` / `emit`.
+
+## What's inside
+
+- **Fleet onboarding over SSH** — `keys`, `onboard`, `doctor --fleet`: keygen, `ssh-copy-id`, a read-only uptime/tooling sweep, and a per-fleet readiness report. Nothing lands on the targets.
+- **Desired-state deploy & repair** — `plan`, `deploy`, upgrade, `rollback`; `deploy --check` detects drift and a converge run repairs only what moved, content-addressed by sha256.
+- **Tamper-evident Merkle audit ledger** — every run is hash-chained and Merkle-rooted. `audit verify` recomputes the chain, `audit prove` gives an O(log n) inclusion proof, `audit emit` POSTs a signed receipt to a collector.
+- **Secrets never at rest** — config holds *references* (`env://`, `bao://`, `sops://`, `delinea://`), never literals; sudo passwords stream in on stdin and are scrubbed from every artifact.
+- **Web UI & automation** — render a multi-user [Semaphore](https://semaphoreui.com) front end on PostgreSQL 17, or drive the whole pipeline from an n8n workflow. The CLI stays the engine.
+- **Compliance & multi-DB** — read-only NIST/CMS-mapped checks with advisory hardening plans, plus safe `db doctor`/`backup`/`audit` for PostgreSQL 17, Oracle 19c, and SQLite.
 
 Support the line: Local-81 tee and mug runs may be offered for the Union Locals morale and welfare fund.
 
