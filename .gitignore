@@ -23,3 +23,7 @@ packaging/rpm/rpmbuild/
 packaging/deb/.debbuild/
 packaging/deb/*.deb
 packaging/rpm/.rpmbuild/
+
+# local working artifacts (not product code)
+.claude/
+docs/demo/

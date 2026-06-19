@@ -911,3 +911,64 @@ def test_cli_logs_host_flag() -> None:
     parser = build_parser()
     args = parser.parse_args(["logs", "run-1", "--host", "web1"])
     assert args.host == "web1"
+
+
+def _write_secret_echo_plan(path: Path, *, secret: str) -> None:
+    """A live (non-dry) plan whose step echoes a secret value to stdout."""
+    payload = {
+        "schema": "local81.plan.v0.1",
+        "kind": "plan",
+        "mode": "deploy",
+        "plan_id": "p-secret",
+        # type 'rsync' with no op/intent runs the raw cmd via the local shell.
+        "scopes": [{"scope": "web", "steps": [
+            {"id": "scope:web:0001", "type": "rsync", "host": "local",
+             "cmd": f"printf '%s' {secret}"},
+        ]}],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_run_record_scrubs_resolved_secret_from_run_json(tmp_path: Path, monkeypatch, capsys) -> None:
+    """A secret the resolver handed out must never land in run.json in cleartext.
+
+    Backs the on-disk half of the "secrets never at rest" guarantee: even when a
+    deployed command emits a secret to stdout, the per-run scrubber masks it.
+    """
+    from local81.secrets import SecretResolver
+
+    secret = "topsecret123value"
+    monkeypatch.setenv("LOCAL81_TEST_SECRET", secret)
+    monkeypatch.chdir(tmp_path)
+
+    resolver = SecretResolver(env={"LOCAL81_TEST_SECRET": secret})
+    assert resolver.resolve("env://LOCAL81_TEST_SECRET") == secret  # now in _seen
+
+    plan_path = tmp_path / "plan.json"
+    _write_secret_echo_plan(plan_path, secret=secret)
+
+    rc = run_deploy(plan=str(plan_path), scope="web", dry_run=False, resolver=resolver)
+    assert rc == 0
+
+    run_files = list((tmp_path / ".local81" / "runs").glob("*/run.json"))
+    assert len(run_files) == 1
+    raw = run_files[0].read_text(encoding="utf-8")
+    # The command really did emit the secret (step captured stdout)...
+    run = json.loads(raw)
+    assert run["steps"][0]["stdout"] == "***"
+    # ...and nowhere in the on-disk artifact does the cleartext survive.
+    assert secret not in raw
+    assert "***" in raw
+
+
+def test_run_record_unchanged_when_no_secret_resolved(tmp_path: Path, monkeypatch, capsys) -> None:
+    """No resolved secrets => scrub is an identity no-op (no false masking)."""
+    monkeypatch.chdir(tmp_path)
+    plan_path = tmp_path / "plan.json"
+    _write_secret_echo_plan(plan_path, secret="plainoutput")
+
+    rc = run_deploy(plan=str(plan_path), scope="web", dry_run=False)
+    assert rc == 0
+    run_files = list((tmp_path / ".local81" / "runs").glob("*/run.json"))
+    run = json.loads(run_files[0].read_text(encoding="utf-8"))
+    assert run["steps"][0]["stdout"] == "plainoutput"

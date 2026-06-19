@@ -19,7 +19,14 @@ from local81.notifications import NotificationEvent, notify_all
 from local81.plan_integrity import plan_provenance_warnings
 from local81.policy import enforce_deploy_policy
 from local81.resolve import resolve_step_action
+from local81.secrets import SecretResolver
 from local81.state import load_scope_state
+
+# A scrubber masks resolved secret values out of any text before it lands on
+# disk. ``SecretResolver.scrub`` is the real one; this no-op is the default so
+# callers that never resolve a secret stay byte-for-byte unchanged.
+def _no_scrub(text: str) -> str:
+    return text
 
 _print_lock = Lock()
 
@@ -69,13 +76,15 @@ def _step_host(step: dict, host_label: str | None = None) -> str | None:
     return host_label or step.get("host") or step.get("server")
 
 
-def _write_json(path: Path, payload: dict) -> None:
+def _write_json(path: Path, payload: dict, *, scrub=_no_scrub) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    # Scrub the serialized form so masking covers every nested field (step
+    # stdout/stderr/cmd) regardless of structure — secrets never at rest.
+    path.write_text(scrub(json.dumps(payload, separators=(",", ":"))), encoding="utf-8")
     path.chmod(0o600)
 
 
-def _update_scope_state(scope_name: str, *, plan_id: str | None, run_id: str, rc: int, deployed_files: int) -> None:
+def _update_scope_state(scope_name: str, *, plan_id: str | None, run_id: str, rc: int, deployed_files: int, scrub=_no_scrub) -> None:
     state = load_scope_state(scope_name)
     payload = {
         "schema": "local81.state.v0.1",
@@ -85,7 +94,7 @@ def _update_scope_state(scope_name: str, *, plan_id: str | None, run_id: str, rc
         "last_run_id": run_id,
         "files_last_deployed_count": deployed_files,
     }
-    _write_json(Path(".local81") / "state" / f"{scope_name}.json", payload)
+    _write_json(Path(".local81") / "state" / f"{scope_name}.json", payload, scrub=scrub)
 
 
 def parse_hosts_file(path: str) -> list[dict]:
@@ -336,17 +345,17 @@ def _run_step(scope_name: str, step: dict, *, dry_run: bool, step_timeout: int |
     return step_record
 
 
-def _write_rollback_record(run_dir: Path | None, record: dict) -> None:
+def _write_rollback_record(run_dir: Path | None, record: dict, *, scrub=_no_scrub) -> None:
     if run_dir is None:
         return
     rollback_log = run_dir / "rollback.log"
     with rollback_log.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, separators=(",", ":")) + "\n")
+        fh.write(scrub(json.dumps(record, separators=(",", ":"))) + "\n")
     rollback_log.chmod(0o600)
 
 
 def _run_rollbacks(successful_with_rollback: list[dict], *, dry_run: bool,
-                   run_dir: Path | None, printer=print) -> None:
+                   run_dir: Path | None, printer=print, scrub=_no_scrub) -> None:
     for prev in reversed(successful_with_rollback):
         rollback = prev.get("rollback") or {}
         if not rollback.get("cmd"):
@@ -363,7 +372,7 @@ def _run_rollbacks(successful_with_rollback: list[dict], *, dry_run: bool,
             "finished_at": finished,
             "stdout": rollback_stdout,
             "stderr": rollback_stderr,
-        })
+        }, scrub=scrub)
         if rollback_rc != 0:
             printer(f"  !! Rollback failed with rc={rollback_rc}: {prev.get('id')}")
             if rollback_stderr:
@@ -387,7 +396,7 @@ def _record_skipped_step(scope_name: str, step: dict, host_label: str | None) ->
 
 def _handle_step_failure(step: dict, step_record: dict, *, successful_with_rollback: list[dict],
                          dry_run: bool, rollback_on_failure: bool, plan_data: dict,
-                         run_dir: Path | None, printer=print) -> int:
+                         run_dir: Path | None, printer=print, scrub=_no_scrub) -> int:
     step_rc = step_record["rc"]
     stderr = step_record.get("stderr", "")
     printer(f"  !! Step failed with rc={step_rc}: {step['id']}")
@@ -397,7 +406,7 @@ def _handle_step_failure(step: dict, step_record: dict, *, successful_with_rollb
     if on_failure.get("cmd"):
         _run_shell(on_failure["cmd"], dry_run=dry_run)
     if rollback_on_failure:
-        _run_rollbacks(successful_with_rollback, dry_run=dry_run, run_dir=run_dir, printer=printer)
+        _run_rollbacks(successful_with_rollback, dry_run=dry_run, run_dir=run_dir, printer=printer, scrub=scrub)
     global_failure = plan_data.get("on_failure") or {}
     if global_failure.get("cmd"):
         _run_shell(global_failure["cmd"], dry_run=dry_run)
@@ -411,7 +420,7 @@ def _deploy_scope_steps(scope_obj: dict, *, dry_run: bool, step_timeout: int | N
                         notifications_log: list[str] | None = None,
                         quiet: bool = False, force_notify: bool = False,
                         run_id: str = "", run_dir: Path | None = None,
-                        max_parallel: int = 1) -> tuple[list[dict], int, int]:
+                        max_parallel: int = 1, scrub=_no_scrub) -> tuple[list[dict], int, int]:
     scope_name = scope_obj.get("scope", "unknown")
     steps_out: list[dict] = []
     successful_with_rollback: list[dict] = []
@@ -479,6 +488,7 @@ def _deploy_scope_steps(scope_obj: dict, *, dry_run: bool, step_timeout: int | N
                         plan_data=plan_data,
                         run_dir=run_dir,
                         printer=printer,
+                        scrub=scrub,
                     )
                 failure_seen = True
             if failure_seen and fail_fast:
@@ -519,6 +529,7 @@ def _deploy_scope_steps(scope_obj: dict, *, dry_run: bool, step_timeout: int | N
             plan_data=plan_data,
             run_dir=run_dir,
             printer=printer,
+            scrub=scrub,
         )
         if fail_fast:
             for remaining in steps[index + 1:]:
@@ -543,7 +554,7 @@ def _deploy_host_group(host: str, steps: list[dict], *, dry_run: bool,
                        rollback_on_failure: bool, plan_data: dict,
                        notifications_config: dict | None, notifications_log: list[str],
                        quiet: bool, force_notify: bool, run_id: str,
-                       run_dir: Path | None, max_parallel: int) -> dict:
+                       run_dir: Path | None, max_parallel: int, scrub=_no_scrub) -> dict:
     scope_obj = {"scope": steps[0].get("_scope", "unknown"), "steps": steps}
     steps_out, rc, deployed_files = _deploy_scope_steps(
         scope_obj, dry_run=dry_run, step_timeout=step_timeout,
@@ -551,12 +562,12 @@ def _deploy_host_group(host: str, steps: list[dict], *, dry_run: bool,
         plan_data=plan_data, host_label=host, printer=_safe_print,
         notifications_config=notifications_config, notifications_log=notifications_log,
         quiet=quiet, force_notify=force_notify, run_id=run_id,
-        run_dir=run_dir, max_parallel=max_parallel,
+        run_dir=run_dir, max_parallel=max_parallel, scrub=scrub,
     )
     return {"host": host, "rc": rc, "deployed_files": deployed_files, "steps": steps_out}
 
 
-def _write_host_log(run_dir: Path | None, host: str, steps: list[dict]) -> None:
+def _write_host_log(run_dir: Path | None, host: str, steps: list[dict], *, scrub=_no_scrub) -> None:
     """Write a per-host run log so operators can ``logs <run-id> --host <h>``."""
     if run_dir is None:
         return
@@ -568,7 +579,7 @@ def _write_host_log(run_dir: Path | None, host: str, steps: list[dict]) -> None:
         lines.append(f"[{tag}] {step.get('id', '?')} [{step.get('type', 'step')}]")
         if step.get("stderr"):
             lines.append(f"  stderr: {step['stderr']}")
-    log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    log_path.write_text(scrub("\n".join(lines) + "\n"), encoding="utf-8")
     log_path.chmod(0o600)
 
 
@@ -588,7 +599,7 @@ def _run_fleet_deploy(scopes: list[dict], *, dry_run: bool, step_timeout: int | 
                       notifications_cfg: dict, notification_warnings: list[str],
                       quiet: bool, notify: bool, run_id: str, run_dir: Path | None,
                       max_parallel: int, forks: int, serial: str | None,
-                      max_fail: str | None, limit: str | None) -> tuple[list[dict], int, list[dict]]:
+                      max_fail: str | None, limit: str | None, scrub=_no_scrub) -> tuple[list[dict], int, list[dict]]:
     """Schedule the plan's hosts in rolling batches with a failure threshold.
 
     Derives the fleet from the distinct ``host`` of each plan step, applies the
@@ -609,9 +620,9 @@ def _run_fleet_deploy(scopes: list[dict], *, dry_run: bool, step_timeout: int | 
             plan_data=plan_data, notifications_config=notifications_cfg,
             notifications_log=notification_warnings, quiet=quiet,
             force_notify=notify, run_id=run_id, run_dir=run_dir,
-            max_parallel=max_parallel,
+            max_parallel=max_parallel, scrub=scrub,
         )
-        _write_host_log(run_dir, host, result["steps"])
+        _write_host_log(run_dir, host, result["steps"], scrub=scrub)
         status = classify(result["rc"], result["deployed_files"])
         return HostOutcome(host=host, status=status, rc=result["rc"],
                            changed_count=result["deployed_files"], detail=result)
@@ -641,9 +652,15 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
                check: bool = False, allow_drift: bool = False, profile: str | None = None,
                notify: bool = False, quiet: bool = False,
                forks: int | None = None, serial: str | None = None,
-               max_fail: str | None = None, limit: str | None = None) -> int:
+               max_fail: str | None = None, limit: str | None = None,
+               resolver: SecretResolver | None = None) -> int:
     if check:
         return run_check(plan=plan, use_latest=use_latest, scope=scope, allow_drift=allow_drift)
+    # One scrubber per run: every secret the resolver hands out during this
+    # deploy is masked out of run.json, host logs and rollback logs before they
+    # touch disk. With no secrets resolved, scrub is an identity no-op.
+    resolver = resolver or SecretResolver()
+    scrub = resolver.scrub
     plan_path = _resolve_plan_path(plan=plan, use_latest=use_latest)
     if plan_path is None or not plan_path.is_file():
         target = plan_path if plan_path is not None else Path(".local81/plans")
@@ -726,11 +743,11 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
             notifications_cfg=notifications_cfg, notification_warnings=notification_warnings,
             quiet=quiet, notify=notify, run_id=run_id, run_dir=run_dir,
             max_parallel=max_parallel, forks=effective_forks, serial=serial,
-            max_fail=max_fail, limit=limit,
+            max_fail=max_fail, limit=limit, scrub=scrub,
         )
         if not dry_run and overall_rc == 0:
             for scope_obj in scopes:
-                _update_scope_state(scope_obj.get("scope", "unknown"), plan_id=plan_data.get("plan_id"), run_id=run_id, rc=overall_rc, deployed_files=sum(hr["deployed_files"] for hr in host_results))
+                _update_scope_state(scope_obj.get("scope", "unknown"), plan_id=plan_data.get("plan_id"), run_id=run_id, rc=overall_rc, deployed_files=sum(hr["deployed_files"] for hr in host_results), scrub=scrub)
     elif hosts:
         host_aliases = {h["alias"] for h in hosts}
         host_aliases.update(h["server"] for h in hosts)
@@ -748,7 +765,7 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
         if parallel and len(filtered_groups) > 1:
             workers = max_parallel if max_parallel > 1 else len(filtered_groups)
             with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {executor.submit(_deploy_host_group, host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel): host_key for host_key, host_steps in filtered_groups.items()}
+                futures = {executor.submit(_deploy_host_group, host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub): host_key for host_key, host_steps in filtered_groups.items()}
                 for future in as_completed(futures):
                     result = future.result()
                     all_steps.extend(result["steps"])
@@ -759,7 +776,7 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
                             break
         else:
             for host_key, host_steps in filtered_groups.items():
-                result = _deploy_host_group(host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel)
+                result = _deploy_host_group(host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub)
                 all_steps.extend(result["steps"])
                 host_results.append({"host": result["host"], "rc": result["rc"], "deployed_files": result["deployed_files"]})
                 if result["rc"] != 0:
@@ -773,14 +790,14 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
             print(f"  {hr['host']}: {status} ({hr['deployed_files']} files)")
         if not dry_run and overall_rc == 0:
             for scope_obj in scopes:
-                _update_scope_state(scope_obj.get("scope", "unknown"), plan_id=plan_data.get("plan_id"), run_id=run_id, rc=overall_rc, deployed_files=sum(hr["deployed_files"] for hr in host_results))
+                _update_scope_state(scope_obj.get("scope", "unknown"), plan_id=plan_data.get("plan_id"), run_id=run_id, rc=overall_rc, deployed_files=sum(hr["deployed_files"] for hr in host_results), scrub=scrub)
     else:
         for scope_obj in scopes:
             scope_name = scope_obj.get("scope", "unknown")
-            steps_out, rc, deployed_files = _deploy_scope_steps(scope_obj, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel)
+            steps_out, rc, deployed_files = _deploy_scope_steps(scope_obj, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub)
             all_steps.extend(steps_out)
             if not dry_run and rc == 0:
-                _update_scope_state(scope_name, plan_id=plan_data.get("plan_id"), run_id=run_id, rc=rc, deployed_files=deployed_files)
+                _update_scope_state(scope_name, plan_id=plan_data.get("plan_id"), run_id=run_id, rc=rc, deployed_files=deployed_files, scrub=scrub)
             if rc != 0:
                 overall_rc = rc
             if rc != 0 and fail_fast:
@@ -790,8 +807,8 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
     payload: dict = {"schema": "local81.run.v0.1", "run_id": run_id, "plan_id": plan_data.get("plan_id"), "started_at": all_steps[0]["started_at"] if all_steps else _now_iso(), "finished_at": _now_iso(), "rc": overall_rc, "dry_run": dry_run, "steps": all_steps, "profile": profile, "notification_warnings": notification_warnings}
     if host_results:
         payload["hosts"] = host_results
-    _write_json(run_json, payload)
-    event = NotificationEvent(host=",".join(hr["host"] for hr in host_results) if host_results else (scope or scopes[0].get("scope", "local")), status="success" if overall_rc == 0 else "failed", duration_seconds=duration, errors=[s["stderr"] for s in all_steps if s.get("stderr") and s.get("rc") not in (0, -1)], run_id=run_id, plan_id=plan_data.get("plan_id"), scope=scope)
+    _write_json(run_json, payload, scrub=scrub)
+    event = NotificationEvent(host=",".join(hr["host"] for hr in host_results) if host_results else (scope or scopes[0].get("scope", "local")), status="success" if overall_rc == 0 else "failed", duration_seconds=duration, errors=[scrub(s["stderr"]) for s in all_steps if s.get("stderr") and s.get("rc") not in (0, -1)], run_id=run_id, plan_id=plan_data.get("plan_id"), scope=scope)
     _maybe_notify(notification_warnings, notifications_cfg, quiet=quiet, force=notify, event=event)
     post_rc, post_out, post_err = run_hook("post-deploy.sh", env={**hook_env, "LOCAL81_DEPLOY_RC": str(overall_rc)})
     if post_out:
