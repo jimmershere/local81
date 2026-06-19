@@ -9,6 +9,8 @@ Three schemes are understood:
   field within that secret.
 * ``sops://<file>#<dotted.json.path>`` — a SOPS-encrypted file, decrypted on
   demand; the fragment is a dotted path walked through the decrypted JSON.
+* ``delinea://<secret-id>#<field>`` — a Delinea Secret Server secret, fetched
+  over its REST API; ``field`` matches an item slug/fieldName within the secret.
 
 Anything without a ``scheme://`` prefix is treated as a *literal* and rejected:
 Local-81 never stores secret literals, so a bare value here is an operator
@@ -21,7 +23,7 @@ from dataclasses import dataclass
 
 from .errors import SecretRefSyntaxError
 
-KNOWN_SCHEMES = ("env", "bao", "sops")
+KNOWN_SCHEMES = ("env", "bao", "sops", "delinea")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,10 +67,10 @@ def parse_ref(spec: str) -> SecretRef:
             raise SecretRefSyntaxError(f"env:// reference takes no '#key' fragment: {spec!r}")
         return SecretRef(scheme="env", location=rest, key=None, raw=spec)
 
-    # bao + sops both require a '#<key>' fragment.
+    # bao + sops + delinea all require a '#<key>' fragment.
     location, sep, key = rest.partition("#")
     if not sep or not key:
-        fragment = "#<key>" if scheme == "bao" else "#<dotted.path>"
+        fragment = {"bao": "#<key>", "sops": "#<dotted.path>", "delinea": "#<field>"}.get(scheme, "#<key>")
         raise SecretRefSyntaxError(f"{scheme}:// reference must end with {fragment}: {spec!r}")
     if not location:
         raise SecretRefSyntaxError(f"{scheme}:// reference has an empty path: {spec!r}")

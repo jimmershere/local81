@@ -11,6 +11,8 @@ from pathlib import Path
 from threading import Lock
 from time import monotonic
 
+from local81.become import DISABLED as _BECOME_DISABLED
+from local81.become import Become, resolve_become
 from local81.config import load_config, resolve_config_path, validate_config
 from local81.execution_safety import summarize_execution_risks
 from local81.fleet import HostOutcome, classify, render_summary, run_fleet
@@ -48,11 +50,13 @@ def _resolve_plan_path(*, plan: str | None = None, use_latest: bool = False, pla
     return None
 
 
-def _run_shell(command: str, timeout_seconds: int | None = None, *, dry_run: bool = False) -> tuple[int, str, str, bool]:
+def _run_shell(command: str, timeout_seconds: int | None = None, *, dry_run: bool = False,
+               stdin_input: str | None = None) -> tuple[int, str, str, bool]:
     if dry_run:
         return 0, "", "", False
     try:
-        proc = subprocess.run(["bash", "-lc", command], text=True, capture_output=True, timeout=timeout_seconds)
+        proc = subprocess.run(["bash", "-lc", command], text=True, capture_output=True,
+                              timeout=timeout_seconds, input=stdin_input)
         return proc.returncode, proc.stdout.strip(), proc.stderr.strip(), False
     except subprocess.TimeoutExpired as exc:
         stdout = (exc.stdout or "").strip() if isinstance(exc.stdout, str) else ""
@@ -60,11 +64,13 @@ def _run_shell(command: str, timeout_seconds: int | None = None, *, dry_run: boo
         return 124, stdout, stderr or "step timed out", True
 
 
-def _run_remote(host: str, command: str, timeout_seconds: int | None = None, *, dry_run: bool = False) -> tuple[int, str, str, bool]:
+def _run_remote(host: str, command: str, timeout_seconds: int | None = None, *, dry_run: bool = False,
+                stdin_input: str | None = None) -> tuple[int, str, str, bool]:
     if dry_run:
         return 0, "", "", False
     try:
-        proc = subprocess.run(["ssh", host, command], text=True, capture_output=True, timeout=timeout_seconds)
+        proc = subprocess.run(["ssh", host, command], text=True, capture_output=True,
+                              timeout=timeout_seconds, input=stdin_input)
         return proc.returncode, proc.stdout.strip(), proc.stderr.strip(), False
     except subprocess.TimeoutExpired as exc:
         stdout = (exc.stdout or "").strip() if isinstance(exc.stdout, str) else ""
@@ -283,7 +289,7 @@ def _run_step(scope_name: str, step: dict, *, dry_run: bool, step_timeout: int |
               notifications_config: dict | None = None,
               notifications_log: list[str] | None = None,
               quiet: bool = False, force_notify: bool = False,
-              run_id: str = "") -> dict:
+              run_id: str = "", become: Become = _BECOME_DISABLED) -> dict:
     target_host = _step_host(step, host_label)
     step_record: dict = {
         "scope": scope_name,
@@ -324,10 +330,18 @@ def _run_step(scope_name: str, step: dict, *, dry_run: bool, step_timeout: int |
     timeout_seconds = step.get("timeout")
     if timeout_seconds is None:
         timeout_seconds = step_timeout
+    # Privilege escalation is opt-in per step (``"become": true``) and only
+    # actually elevates when the run carries a become context. The password (if
+    # any) goes to sudo on stdin; the recorded cmd stays the un-wrapped form.
+    step_become = become if step.get("become") else _BECOME_DISABLED
+    effective_cmd = step_become.wrap(step["cmd"])
+    stdin_input = step_become.stdin
+    if step_become.enabled:
+        step_record["become"] = True
     if step.get("type") == "remote_cmd" and target_host:
-        step_rc, stdout, stderr, timed_out = _run_remote(target_host, step["cmd"], timeout_seconds=timeout_seconds, dry_run=dry_run)
+        step_rc, stdout, stderr, timed_out = _run_remote(target_host, effective_cmd, timeout_seconds=timeout_seconds, dry_run=dry_run, stdin_input=stdin_input)
     else:
-        step_rc, stdout, stderr, timed_out = _run_shell(step["cmd"], timeout_seconds=timeout_seconds, dry_run=dry_run)
+        step_rc, stdout, stderr, timed_out = _run_shell(effective_cmd, timeout_seconds=timeout_seconds, dry_run=dry_run, stdin_input=stdin_input)
     finished = _now_iso()
     duration = monotonic() - started_monotonic
     step_record.update({"rc": step_rc, "started_at": started, "finished_at": finished, "stdout": stdout, "stderr": stderr, "duration_seconds": duration})
@@ -420,7 +434,8 @@ def _deploy_scope_steps(scope_obj: dict, *, dry_run: bool, step_timeout: int | N
                         notifications_log: list[str] | None = None,
                         quiet: bool = False, force_notify: bool = False,
                         run_id: str = "", run_dir: Path | None = None,
-                        max_parallel: int = 1, scrub=_no_scrub) -> tuple[list[dict], int, int]:
+                        max_parallel: int = 1, scrub=_no_scrub,
+                        become: Become = _BECOME_DISABLED) -> tuple[list[dict], int, int]:
     scope_name = scope_obj.get("scope", "unknown")
     steps_out: list[dict] = []
     successful_with_rollback: list[dict] = []
@@ -464,6 +479,7 @@ def _deploy_scope_steps(scope_obj: dict, *, dry_run: bool, step_timeout: int | N
                         quiet=quiet,
                         force_notify=force_notify,
                         run_id=run_id,
+                        become=become,
                     ): batch_index
                     for batch_index, parallel_step in parallel_batch
                 }
@@ -510,6 +526,7 @@ def _deploy_scope_steps(scope_obj: dict, *, dry_run: bool, step_timeout: int | N
             quiet=quiet,
             force_notify=force_notify,
             run_id=run_id,
+            become=become,
         )
         steps_out.append(step_record)
         if step_record["rc"] == 0:
@@ -554,7 +571,8 @@ def _deploy_host_group(host: str, steps: list[dict], *, dry_run: bool,
                        rollback_on_failure: bool, plan_data: dict,
                        notifications_config: dict | None, notifications_log: list[str],
                        quiet: bool, force_notify: bool, run_id: str,
-                       run_dir: Path | None, max_parallel: int, scrub=_no_scrub) -> dict:
+                       run_dir: Path | None, max_parallel: int, scrub=_no_scrub,
+                       become: Become = _BECOME_DISABLED) -> dict:
     scope_obj = {"scope": steps[0].get("_scope", "unknown"), "steps": steps}
     steps_out, rc, deployed_files = _deploy_scope_steps(
         scope_obj, dry_run=dry_run, step_timeout=step_timeout,
@@ -562,7 +580,7 @@ def _deploy_host_group(host: str, steps: list[dict], *, dry_run: bool,
         plan_data=plan_data, host_label=host, printer=_safe_print,
         notifications_config=notifications_config, notifications_log=notifications_log,
         quiet=quiet, force_notify=force_notify, run_id=run_id,
-        run_dir=run_dir, max_parallel=max_parallel, scrub=scrub,
+        run_dir=run_dir, max_parallel=max_parallel, scrub=scrub, become=become,
     )
     return {"host": host, "rc": rc, "deployed_files": deployed_files, "steps": steps_out}
 
@@ -599,7 +617,8 @@ def _run_fleet_deploy(scopes: list[dict], *, dry_run: bool, step_timeout: int | 
                       notifications_cfg: dict, notification_warnings: list[str],
                       quiet: bool, notify: bool, run_id: str, run_dir: Path | None,
                       max_parallel: int, forks: int, serial: str | None,
-                      max_fail: str | None, limit: str | None, scrub=_no_scrub) -> tuple[list[dict], int, list[dict]]:
+                      max_fail: str | None, limit: str | None, scrub=_no_scrub,
+                      become: Become = _BECOME_DISABLED) -> tuple[list[dict], int, list[dict]]:
     """Schedule the plan's hosts in rolling batches with a failure threshold.
 
     Derives the fleet from the distinct ``host`` of each plan step, applies the
@@ -620,7 +639,7 @@ def _run_fleet_deploy(scopes: list[dict], *, dry_run: bool, step_timeout: int | 
             plan_data=plan_data, notifications_config=notifications_cfg,
             notifications_log=notification_warnings, quiet=quiet,
             force_notify=notify, run_id=run_id, run_dir=run_dir,
-            max_parallel=max_parallel, scrub=scrub,
+            max_parallel=max_parallel, scrub=scrub, become=become,
         )
         _write_host_log(run_dir, host, result["steps"], scrub=scrub)
         status = classify(result["rc"], result["deployed_files"])
@@ -667,6 +686,16 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
         print(f"Local-81 deploy could not find plan file: {target}")
         return 1
     plan_data = _load_plan(plan_path)
+    # Optional privilege escalation. A plan-level ``become`` block enables sudo;
+    # ``password_ref`` (a secret reference, never a literal) is resolved here in
+    # memory via the same resolver, so the password is scrubbed from artifacts.
+    _become_cfg = plan_data.get("become") or {}
+    become_ctx = resolve_become(
+        resolver,
+        password_ref=_become_cfg.get("password_ref"),
+        enabled=bool(_become_cfg),
+        user=_become_cfg.get("user"),
+    )
     scopes = plan_data.get("scopes", [])
     if scope:
         scopes = [s for s in scopes if s.get("scope") == scope]
@@ -743,7 +772,7 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
             notifications_cfg=notifications_cfg, notification_warnings=notification_warnings,
             quiet=quiet, notify=notify, run_id=run_id, run_dir=run_dir,
             max_parallel=max_parallel, forks=effective_forks, serial=serial,
-            max_fail=max_fail, limit=limit, scrub=scrub,
+            max_fail=max_fail, limit=limit, scrub=scrub, become=become_ctx,
         )
         if not dry_run and overall_rc == 0:
             for scope_obj in scopes:
@@ -765,7 +794,7 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
         if parallel and len(filtered_groups) > 1:
             workers = max_parallel if max_parallel > 1 else len(filtered_groups)
             with ThreadPoolExecutor(max_workers=workers) as executor:
-                futures = {executor.submit(_deploy_host_group, host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub): host_key for host_key, host_steps in filtered_groups.items()}
+                futures = {executor.submit(_deploy_host_group, host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub, become=become_ctx): host_key for host_key, host_steps in filtered_groups.items()}
                 for future in as_completed(futures):
                     result = future.result()
                     all_steps.extend(result["steps"])
@@ -776,7 +805,7 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
                             break
         else:
             for host_key, host_steps in filtered_groups.items():
-                result = _deploy_host_group(host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub)
+                result = _deploy_host_group(host_key, host_steps, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub, become=become_ctx)
                 all_steps.extend(result["steps"])
                 host_results.append({"host": result["host"], "rc": result["rc"], "deployed_files": result["deployed_files"]})
                 if result["rc"] != 0:
@@ -794,7 +823,7 @@ def run_deploy(*, plan: str | None = None, use_latest: bool = False, scope: str 
     else:
         for scope_obj in scopes:
             scope_name = scope_obj.get("scope", "unknown")
-            steps_out, rc, deployed_files = _deploy_scope_steps(scope_obj, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub)
+            steps_out, rc, deployed_files = _deploy_scope_steps(scope_obj, dry_run=dry_run, step_timeout=step_timeout, fail_fast=fail_fast, rollback_on_failure=rollback_on_failure, plan_data=plan_data, notifications_config=notifications_cfg, notifications_log=notification_warnings, quiet=quiet, force_notify=notify, run_id=run_id, run_dir=run_dir, max_parallel=max_parallel, scrub=scrub, become=become_ctx)
             all_steps.extend(steps_out)
             if not dry_run and rc == 0:
                 _update_scope_state(scope_name, plan_id=plan_data.get("plan_id"), run_id=run_id, rc=rc, deployed_files=deployed_files, scrub=scrub)

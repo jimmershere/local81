@@ -9,6 +9,7 @@ this package is the only place plaintext exists, and only in memory.
 from __future__ import annotations
 
 from .bao import BaoClient
+from .delinea import DelineaClient
 from .errors import (
     SecretBackendError,
     SecretError,
@@ -21,6 +22,7 @@ from .resolver import SecretResolver, validate_refs
 
 __all__ = [
     "BaoClient",
+    "DelineaClient",
     "KNOWN_SCHEMES",
     "SecretBackendError",
     "SecretError",

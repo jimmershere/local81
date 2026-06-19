@@ -14,6 +14,7 @@ import os
 from typing import Any, Callable
 
 from .bao import BaoClient
+from .delinea import DelineaClient
 from .errors import SecretNotFoundError
 from .refs import SecretRef, is_secret_ref, parse_ref
 from .sops import decrypt_value
@@ -26,11 +27,14 @@ class SecretResolver:
         self,
         *,
         bao_client_factory: Callable[[], BaoClient] | None = None,
+        delinea_client_factory: Callable[[], DelineaClient] | None = None,
         env: dict[str, str] | None = None,
     ) -> None:
         self._bao_client_factory = bao_client_factory or BaoClient.from_env
+        self._delinea_client_factory = delinea_client_factory or DelineaClient.from_env
         self._env = env if env is not None else os.environ
         self._bao: BaoClient | None = None
+        self._delinea: DelineaClient | None = None
         self._seen: set[str] = set()
 
     def resolve(self, spec: str | SecretRef) -> str:
@@ -61,12 +65,19 @@ class SecretResolver:
             return self._bao_client().read_kv2(mount, path, ref.key or "")
         if ref.scheme == "sops":
             return decrypt_value(ref.location, ref.key or "")
+        if ref.scheme == "delinea":
+            return self._delinea_client().read_secret(ref.location, ref.key or "")
         raise SecretNotFoundError(f"no backend for scheme {ref.scheme!r}")
 
     def _bao_client(self) -> BaoClient:
         if self._bao is None:
             self._bao = self._bao_client_factory()
         return self._bao
+
+    def _delinea_client(self) -> DelineaClient:
+        if self._delinea is None:
+            self._delinea = self._delinea_client_factory()
+        return self._delinea
 
     @property
     def resolved_values(self) -> frozenset[str]:

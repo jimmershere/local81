@@ -673,7 +673,7 @@ def test_deploy_remote_cmd_uses_ssh_target(tmp_path: Path, monkeypatch, capsys) 
 
     captured: list[tuple[str, str]] = []
 
-    def fake_run_remote(host: str, command: str, timeout_seconds=None, *, dry_run: bool = False):
+    def fake_run_remote(host: str, command: str, timeout_seconds=None, *, dry_run: bool = False, stdin_input=None):
         captured.append((host, command))
         return 0, "ok", "", False
 
