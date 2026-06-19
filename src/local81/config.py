@@ -11,6 +11,7 @@ import yaml
 from .db.config import validate_database_ini_section, validate_database_yaml_targets
 from .models import ScopeConfig
 from .profiles import load_profile_data, merge_profile
+from .ssh import STRICT_HOST_KEY_CHOICES, SshOptions
 
 DEFAULT_CONFIG_PATH = Path(".local81/config.ini")
 ALT_CONFIG_PATHS = (Path(".local81/config.yaml"), Path(".local81/config.yml"))
@@ -41,6 +42,11 @@ class Local81Config:
     routing_env_from_server_name_char_map: str = "s:sys,q:qa,p:production"
     profile: str | None = None
     notifications: dict[str, Any] = field(default_factory=dict)
+    ssh: dict[str, Any] = field(default_factory=dict)
+
+    def ssh_options(self) -> SshOptions:
+        """The connection options from ``[ssh]`` as a rendered helper."""
+        return SshOptions.from_config(self.ssh)
 
 
 def resolve_config_path(path: str | Path = DEFAULT_CONFIG_PATH) -> Path:
@@ -80,6 +86,14 @@ _INI_ALLOWED_KEYS = {
         "shell",
     },
     "tools": {"ssh", "rsync", "find", "jq"},
+    "ssh": {
+        "user",
+        "port",
+        "identity_file",
+        "known_hosts",
+        "strict_host_key_checking",
+        "connect_timeout",
+    },
     "defaults": {
         "rsync_opts",
         "backup",
@@ -366,6 +380,16 @@ def _validate_ini_config(path: Path) -> list[ConfigValidationFinding]:
     for section, option in _BOOLEAN_KEYS:
         _validate_bool(parser, section, option, findings)
     _validate_int(parser, "routing", "env_from_server_name_char_at", minimum=1, findings=findings)
+    if parser.has_section("ssh"):
+        _validate_int(parser, "ssh", "port", minimum=1, findings=findings)
+        _validate_int(parser, "ssh", "connect_timeout", minimum=1, findings=findings)
+        strict = parser.get("ssh", "strict_host_key_checking", fallback="")
+        if strict and strict not in STRICT_HOST_KEY_CHOICES:
+            findings.append(_validation_finding(
+                "FAIL",
+                "[ssh] strict_host_key_checking must be one of: "
+                + ", ".join(sorted(STRICT_HOST_KEY_CHOICES)),
+            ))
     _validate_int(parser, "access.ldap", "cache_ttl_seconds", minimum=0, findings=findings)
     _validate_int(parser, "access.external", "timeout_seconds", minimum=1, findings=findings)
     if parser.has_section("compliance"):
@@ -404,7 +428,7 @@ def _validate_yaml_config(path: Path) -> list[ConfigValidationFinding]:
     except OSError as exc:
         return [_validation_finding("FAIL", f"could not read {path}: {exc}")]
     data = _expect_mapping(data, "top-level config", findings)
-    allowed_top = {"local81", "tools", "defaults", "routing", "access", "notifications", "scopes", "databases", "compliance"}
+    allowed_top = {"local81", "tools", "ssh", "defaults", "routing", "access", "notifications", "scopes", "databases", "compliance"}
     for key in sorted(set(data) - allowed_top):
         findings.append(_validation_finding("FAIL", f"unknown top-level key {key!r}"))
     core = _expect_mapping(data.get("local81"), "local81", findings)
@@ -440,7 +464,7 @@ def validate_config(path: str | Path = DEFAULT_CONFIG_PATH) -> list[ConfigValida
 def _scope_name(section: str, parser: configparser.ConfigParser) -> str | None:
     if section.startswith('scope "') and section.endswith('"'):
         return section[len('scope "'):-1]
-    if section in {"local81", "defaults", "routing", "tools", "notifications", "notification.telegram", "notification.email"}:
+    if section in {"local81", "defaults", "routing", "tools", "ssh", "notifications", "notification.telegram", "notification.email"}:
         return None
     required_like_scope = {"source_dir", "target_dir", "servers"}
     if required_like_scope.issubset(set(parser.options(section))):
@@ -467,10 +491,14 @@ def _base_dict_from_ini(path: Path) -> dict[str, Any]:
             "backup": _get_bool(parser, section, "backup", _get_bool(parser, "defaults", "backup", True)),
             "backup_suffix": parser.get(section, "backup_suffix", fallback=parser.get("defaults", "backup_suffix", fallback=".bkp")),
         }
+    ssh_cfg: dict[str, Any] = {}
+    if parser.has_section("ssh"):
+        ssh_cfg = {key: parser.get("ssh", key) for key in parser.options("ssh")}
     return {
         "local81": {
             "project": parser.get("local81", "project", fallback=path.parent.parent.name),
         },
+        "ssh": ssh_cfg,
         "defaults": {
             "rsync_opts": parser.get("defaults", "rsync_opts", fallback="-az"),
             "backup": _get_bool(parser, "defaults", "backup", True),
@@ -513,6 +541,7 @@ def _base_dict_from_yaml(path: Path) -> dict[str, Any]:
         "local81": {
             "project": (data.get("local81") or {}).get("project", path.parent.parent.name),
         },
+        "ssh": data.get("ssh") or {},
         "defaults": {
             "rsync_opts": defaults.get("rsync_opts", "-az"),
             "backup": bool(defaults.get("backup", True)),
@@ -574,4 +603,5 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, profile: str | None =
         routing_env_from_server_name_char_map=routing.get("env_from_server_name_char_map", "s:sys,q:qa,p:production"),
         profile=profile,
         notifications=base.get("notifications", {}),
+        ssh=base.get("ssh", {}),
     )

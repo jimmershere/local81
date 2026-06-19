@@ -57,6 +57,7 @@ def run_remote(
     remote_command: str,
     *,
     ssh_bin: str = "ssh",
+    ssh_args: list[str] | None = None,
     cwd: str | None = None,
     timeout_seconds: int | None = None,
     dry_run: bool = False,
@@ -64,7 +65,7 @@ def run_remote(
 ) -> CommandResult:
     remote = remote_command if not cwd else f"cd {shlex.quote(cwd)} && {remote_command}"
     return run_local(
-        [ssh_bin, host, remote],
+        [ssh_bin, *(ssh_args or []), host, remote],
         timeout_seconds=timeout_seconds,
         dry_run=dry_run,
         check=check,
