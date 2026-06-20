@@ -119,6 +119,9 @@ HERE = Path(__file__).resolve().parent
 ACTIONS = json.loads((HERE / "actions.json").read_text(encoding="utf-8"))
 BY_KEY = {c["key"]: c for c in ACTIONS["categories"]}
 TOKEN = os.environ.get("LOCAL81_UI_TOKEN") or secrets.token_urlsafe(24)
+# Where `local81` runs (must hold the .local81/ project). Defaults to the dir the
+# scripts live in; point it at your project root with --project-dir / LOCAL81_DIR.
+PROJECT_DIR = HERE
 
 
 def _lookup(category: str, action: str):
@@ -181,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
                 env[str(k)] = str(v)
         run_env = {**os.environ, **env}
         try:
-            proc = subprocess.run(["bash", str(script)], cwd=str(HERE), env=run_env,
+            proc = subprocess.run(["bash", str(script)], cwd=str(PROJECT_DIR), env=run_env,
                                   capture_output=True, text=True, timeout=900)
             out = (proc.stdout or "") + (proc.stderr or "")
             return self._send(200, json.dumps({"exitCode": proc.returncode, "output": out}))
@@ -196,9 +199,14 @@ def main():
     ap = argparse.ArgumentParser(description="Local-81 click-first control server")
     ap.add_argument("--host", default="127.0.0.1", help="bind address (default localhost only)")
     ap.add_argument("--port", type=int, default=8181)
+    ap.add_argument("--project-dir", default=os.environ.get("LOCAL81_DIR"),
+                    help="project root that holds .local81/ (where local81 runs). Default: this dir.")
     args = ap.parse_args()
+    global PROJECT_DIR
+    if args.project_dir:
+        PROJECT_DIR = Path(args.project_dir).resolve()
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"Local-81 control panel (catalog: {ACTIONS['catalog']})")
+    print(f"Local-81 control panel (catalog: {ACTIONS['catalog']}, project: {PROJECT_DIR})")
     print(f"  open: http://{args.host}:{args.port}/?t={TOKEN}")
     print("  (the ?t=... token is required to run actions; keep this URL private)")
     print("Press Ctrl-C to stop.")
