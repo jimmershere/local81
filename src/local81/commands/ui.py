@@ -18,6 +18,7 @@ target host, and it never writes a secret literal.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from local81.recipes import CatalogError, load_catalog
@@ -36,6 +37,34 @@ def _write(path: Path, payload: dict) -> None:
         pass
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     path.chmod(0o600)
+
+
+# Brand assets the launcher uses (the union seal + the Clem emblem). Best-effort:
+# copied from the source tree's docs/assets if present (editable installs have
+# them), skipped silently otherwise — the launcher degrades gracefully.
+_BRAND_ASSETS = ("local81-logo.svg", "local81-emblem.png")
+
+
+def _copy_brand_assets(dest: Path) -> list[str]:
+    src = Path(__file__).resolve().parents[3] / "docs" / "assets"
+    copied: list[str] = []
+    if not src.is_dir():
+        return copied
+    dest.mkdir(parents=True, exist_ok=True)
+    try:
+        dest.chmod(0o700)
+    except OSError:
+        pass
+    for name in _BRAND_ASSETS:
+        s = src / name
+        if s.is_file():
+            try:
+                shutil.copyfile(s, dest / name)
+                (dest / name).chmod(0o644)
+                copied.append(name)
+            except OSError:
+                pass
+    return copied
 
 
 def _write_text(path: Path, text: str, *, mode: int = 0o600) -> None:
@@ -176,10 +205,13 @@ def _run_stack(cat, *, db_password_ref, out_dir) -> int:
     for rel, text in files.items():
         mode = 0o700 if rel.endswith(".sh") else 0o600
         _write_text(base / rel, text, mode=mode)
+    copied = _copy_brand_assets(base / "assets")
     print("Local-81 ui stack-render")
     print("========================")
     print(f"Catalog:   {cat.name} ({len(cat.recipes)} recipes)")
     print(f"Written:   {len(files)} files -> {base}/")
+    if copied:
+        print(f"Brand:     {len(copied)} asset(s) -> {base}/assets/ ({', '.join(copied)})")
     for rel in sorted(files):
         print(f"  - {rel}")
     print("\nNext: cp .env.example .env and fill it from your secret references, then "

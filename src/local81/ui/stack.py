@@ -149,7 +149,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, (HERE / "launcher.html").read_bytes(), "text/html; charset=utf-8")
         if self.path == "/actions.json":
             return self._send(200, json.dumps(ACTIONS), "application/json")
+        if self.path.startswith("/assets/"):
+            return self._serve_asset(self.path[len("/assets/"):])
         return self._send(404, json.dumps({"error": "not found"}))
+
+    def _serve_asset(self, name):
+        # Path-safe: basename only, must live under HERE/assets, no traversal.
+        safe = os.path.basename(name)
+        path = (HERE / "assets" / safe).resolve()
+        if not str(path).startswith(str((HERE / "assets").resolve())) or not path.is_file():
+            return self._send(404, json.dumps({"error": "asset not found"}))
+        ctypes = {".png": "image/png", ".svg": "image/svg+xml", ".jpg": "image/jpeg",
+                  ".jpeg": "image/jpeg", ".webp": "image/webp", ".ico": "image/x-icon"}
+        ctype = ctypes.get(path.suffix.lower(), "application/octet-stream")
+        return self._send(200, path.read_bytes(), ctype)
 
     def do_POST(self):
         if self.path != "/run":
@@ -237,61 +250,86 @@ _LAUNCHER_HTML = r"""<!doctype html>
 <title>__CATALOG_NAME__ — Local-81 control panel</title>
 <style>
   :root{
-    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --ink:#f0f3f8; --mut:#aab4c0;
-    --line:#2b333d; --acc:#3b82f6; --acc-ink:#fff; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
-    --tap:72px; --radius:14px;
-  }
-  @media (prefers-color-scheme: light){
-    :root{ --bg:#f5f7fa; --panel:#fff; --panel2:#eef1f5; --ink:#0e1116; --mut:#52606d; --line:#d6dce3; }
+    --bg:#0a0e17; --panel:#11161f; --panel2:#161d29; --ink:#eef1f5; --mut:#8a93a3;
+    --line:#222b39; --gold:#d6a23a; --gold-ink:#1a1206; --acc:#58a6ff; --ok:#3fb950;
+    --warn:#e3b341; --danger:#e5533d; --tap:72px; --radius:14px;
   }
   *{ box-sizing:border-box; }
   html{ font-size:18px; }
   body{ margin:0; background:var(--bg); color:var(--ink);
         font:1rem/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .skip{ position:absolute; left:-999px; top:0; background:var(--acc); color:var(--acc-ink); padding:12px 18px; z-index:10; }
+  .skip{ position:absolute; left:-999px; top:0; background:var(--gold); color:var(--gold-ink); padding:12px 18px; z-index:10; font-weight:600; }
   .skip:focus{ left:8px; top:8px; }
-  header{ padding:20px 20px 8px; max-width:920px; margin:0 auto; }
-  h1{ font-size:1.6rem; margin:0; }
-  .tag{ color:var(--mut); margin:4px 0 0; }
-  main{ max-width:920px; margin:0 auto; padding:8px 20px 40px; }
-  .crumbs{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 18px; color:var(--mut); }
+  header{ max-width:940px; margin:0 auto; padding:22px 20px 10px; }
+  .brand{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .seal{ width:60px; height:60px; flex:none; }
+  .brand-words{ display:flex; flex-direction:column; gap:2px; }
+  .wordmark{ font-size:1.5rem; font-weight:700; letter-spacing:.04em; }
+  .wordmark .cp{ color:var(--gold); font-weight:500; letter-spacing:.02em; }
+  .tag{ color:var(--mut); font-size:.95rem; }
+  .status{ margin-left:auto; display:flex; align-items:center; gap:8px; color:var(--mut);
+           font-size:.85rem; border:1px solid var(--line); border-radius:999px; padding:6px 14px; }
+  .dot-live{ width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 0 rgba(63,185,80,.6); }
+  @media (prefers-reduced-motion: no-preference){ .dot-live{ animation:pulse 2.4s infinite; } }
+  @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(63,185,80,.5)} 70%{box-shadow:0 0 0 7px rgba(63,185,80,0)} 100%{box-shadow:0 0 0 0 rgba(63,185,80,0)} }
+  .hero{ max-width:940px; margin:8px auto 0; padding:0 20px; }
+  .hero img{ width:100%; max-height:150px; object-fit:cover; object-position:center 32%;
+             border:1px solid var(--line); border-radius:var(--radius); display:block; }
+  main{ max-width:940px; margin:0 auto; padding:8px 20px 48px; }
+  .about{ margin:16px 0 4px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); }
+  .about summary{ cursor:pointer; padding:14px 18px; color:var(--gold); font-weight:500; list-style:none; }
+  .about summary::-webkit-details-marker{ display:none; }
+  .about summary::before{ content:"›"; display:inline-block; margin-right:10px; transition:transform .15s; }
+  .about[open] summary::before{ transform:rotate(90deg); }
+  .about p{ margin:0; padding:0 18px 16px; color:var(--mut); }
+  .about code{ color:var(--ink); background:var(--panel2); padding:1px 6px; border-radius:6px; }
+  .crumbs{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:18px 0; color:var(--mut); }
   .crumbs b{ color:var(--ink); font-weight:500; }
-  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
+  .lead{ font-size:.95rem; color:var(--mut); margin:0 0 4px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(248px,1fr)); gap:14px; }
   button{ font:inherit; color:var(--ink); background:var(--panel); border:2px solid var(--line);
-          border-radius:var(--radius); padding:18px 18px; min-height:var(--tap); text-align:left;
+          border-radius:var(--radius); padding:18px; min-height:var(--tap); text-align:left;
           cursor:pointer; width:100%; display:flex; align-items:center; gap:14px; }
-  button:hover{ border-color:var(--acc); }
+  button:hover{ border-color:var(--gold); }
   button:focus-visible{ outline:4px solid var(--acc); outline-offset:2px; }
-  button[aria-pressed="true"]{ border-color:var(--acc); background:var(--panel2); }
-  .big{ font-size:1.15rem; font-weight:500; }
-  .dot{ width:38px; height:38px; min-width:38px; border-radius:50%; background:var(--acc); color:var(--acc-ink);
-        display:grid; place-items:center; font-weight:600; font-size:1.1rem; }
-  .sub{ display:block; color:var(--mut); font-size:.92rem; font-weight:400; margin-top:2px; }
-  .mut-tag{ margin-left:auto; color:var(--warn); font-size:.85rem; border:1px solid var(--warn); border-radius:999px; padding:3px 10px; }
-  .section-h{ font-size:1.05rem; margin:22px 0 10px; }
+  button[aria-pressed="true"]{ border-color:var(--gold); background:var(--panel2); }
+  .big{ font-size:1.12rem; font-weight:500; }
+  .icon{ width:42px; height:42px; min-width:42px; border-radius:11px; background:var(--panel2);
+         border:1px solid var(--line); color:var(--gold); display:grid; place-items:center; }
+  .icon svg{ width:24px; height:24px; }
+  .sub{ display:block; color:var(--mut); font-size:.9rem; font-weight:400; margin-top:2px; }
+  .mut-tag{ margin-left:auto; color:var(--warn); font-size:.82rem; border:1px solid var(--warn); border-radius:999px; padding:3px 11px; white-space:nowrap; }
+  .section-h{ font-size:.78rem; text-transform:uppercase; letter-spacing:.13em; color:var(--gold);
+              margin:24px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line); }
   .stepper{ display:flex; align-items:center; gap:0; }
   .stepper button{ width:var(--tap); min-width:var(--tap); justify-content:center; font-size:1.5rem; }
-  .stepper output{ min-width:74px; text-align:center; font-size:1.3rem; font-weight:500; padding:0 10px; }
+  .stepper output{ min-width:80px; text-align:center; font-size:1.3rem; font-weight:600; padding:0 10px; }
   .row{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
   .field{ display:flex; flex-direction:column; gap:6px; margin:10px 0; }
   .field label{ color:var(--mut); }
   .field input{ font:inherit; min-height:var(--tap); padding:0 16px; border-radius:var(--radius);
                 border:2px solid var(--line); background:var(--panel); color:var(--ink); }
-  .runbar{ position:sticky; bottom:0; background:var(--bg); padding:14px 0; margin-top:18px; border-top:2px solid var(--line); }
-  .run{ background:var(--acc); color:var(--acc-ink); border-color:var(--acc); justify-content:center; font-size:1.2rem; font-weight:600; }
-  .run.danger{ background:var(--danger); border-color:var(--danger); }
+  .runbar{ position:sticky; bottom:0; background:linear-gradient(180deg,transparent,var(--bg) 32%);
+           padding:16px 0 8px; margin-top:20px; }
+  .run{ background:var(--gold); color:var(--gold-ink); border-color:var(--gold); justify-content:center; font-size:1.18rem; font-weight:700; }
+  .run.danger{ background:var(--danger); border-color:var(--danger); color:#fff; }
   .run:disabled{ opacity:.45; cursor:not-allowed; }
   .ghost{ background:transparent; }
-  .results{ margin-top:18px; background:var(--panel2); border:2px solid var(--line); border-radius:var(--radius); }
-  .results h2{ font-size:1rem; margin:0; padding:14px 16px; border-bottom:2px solid var(--line); display:flex; align-items:center; gap:10px; }
-  .results pre{ margin:0; padding:16px; overflow:auto; max-height:340px; font:0.95rem/1.5 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
-  .badge{ font-size:.8rem; padding:3px 10px; border-radius:999px; }
-  .badge.ok{ background:rgba(34,197,94,.18); color:var(--ok); }
-  .badge.err{ background:rgba(239,68,68,.18); color:var(--danger); }
-  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:grid; place-items:center; padding:20px; }
+  .results{ margin-top:18px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+  .results h2{ font-size:.78rem; text-transform:uppercase; letter-spacing:.13em; color:var(--mut); margin:0;
+               padding:14px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; }
+  .results pre{ margin:0; padding:16px; overflow:auto; max-height:360px; font:0.92rem/1.5 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
+  .badge{ font-size:.8rem; padding:3px 11px; border-radius:999px; }
+  .badge.ok{ background:rgba(63,185,80,.16); color:var(--ok); }
+  .badge.err{ background:rgba(229,83,61,.18); color:var(--danger); }
+  footer{ max-width:940px; margin:0 auto; padding:8px 20px 40px; color:var(--mut); font-size:.85rem;
+          border-top:1px solid var(--line); display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  footer .sep{ color:var(--line); }
+  footer a{ color:var(--gold); }
+  .modal{ position:fixed; inset:0; background:rgba(5,8,13,.7); display:grid; place-items:center; padding:20px; }
   .modal[hidden]{ display:none; }
-  .modal .card{ background:var(--panel); border:2px solid var(--line); border-radius:var(--radius); padding:24px; max-width:460px; width:100%; }
-  .modal h2{ margin:0 0 8px; }
+  .modal .card{ background:var(--panel); border:2px solid var(--danger); border-radius:var(--radius); padding:24px; max-width:460px; width:100%; }
+  .modal h2{ margin:0 0 8px; color:var(--danger); }
   .modal .row{ margin-top:18px; }
   @media (prefers-reduced-motion: no-preference){ button,.run{ transition:border-color .12s, background .12s; } }
   .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
@@ -300,18 +338,37 @@ _LAUNCHER_HTML = r"""<!doctype html>
 <body>
 <a class="skip" href="#main">Skip to controls</a>
 <header>
-  <h1>__CATALOG_NAME__ control panel</h1>
-  <p class="tag">Pick a task, choose where it runs, press the big button. No typing needed.</p>
+  <div class="brand">
+    <img class="seal" src="assets/local81-logo.svg" alt="Local-81 operators union seal" onerror="this.style.display='none'">
+    <div class="brand-words">
+      <div class="wordmark">LOCAL&#8209;81 <span class="cp">control panel</span></div>
+      <div class="tag">Fully baked orchestration &middot; operators hold the line</div>
+    </div>
+    <div class="status"><span class="dot-live" aria-hidden="true"></span> <span id="status-text">control plane online</span></div>
+  </div>
 </header>
+<div class="hero">
+  <img src="assets/local81-emblem.png" alt="Local-81 — Clem the operator on a Traverse City beachhead" onerror="this.closest('.hero').style.display='none'">
+</div>
 <main id="main">
+  <details class="about">
+    <summary>What am I looking at?</summary>
+    <p><b>Local-81</b> is a push-based deploy &amp; runbook control plane over plain SSH + rsync — no agent on your hosts. Pick a task, choose where it runs, press the big button. Every button runs the same <code>local81</code> command an operator would type by hand, then records a tamper-evident receipt. Nothing here holds your servers' SSH keys.</p>
+  </details>
+  <p class="lead">Pick a task, choose where it runs, press the button.</p>
   <nav class="crumbs" id="crumbs" aria-label="Where you are"></nav>
   <div id="screen" role="region" aria-live="polite"></div>
   <div class="runbar" id="runbar" hidden></div>
   <section class="results" id="results" hidden>
-    <h2><i>Result</i> <span id="result-badge"></span></h2>
+    <h2>Result <span id="result-badge"></span></h2>
     <pre id="result-out" tabindex="0" aria-live="polite"></pre>
   </section>
 </main>
+<footer>
+  <span>Built in Port, Proven at Sea</span> <span class="sep">&middot;</span>
+  <span>Powered by <a href="https://portwright.io">Portwright.io</a></span> <span class="sep">&middot;</span>
+  <span>generated from <code style="color:var(--ink)">__CATALOG_NAME__.yaml</code></span>
+</footer>
 
 <div class="modal" id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="confirm-h">
   <div class="card">
@@ -335,6 +392,16 @@ let TOKEN = qsToken || readTok();
 const state = { cats:[], cat:null, action:null, hosts:null, params:{}, semaphore:"" };
 const el = (t,p={})=>Object.assign(document.createElement(t),p);
 
+const SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+const ICONS={
+  deploy: SVG+'<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/><path d="M5 21h14"/></svg>',
+  observe: SVG+'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  audit: SVG+'<path d="M12 3 5 6v5c0 4 3 7 7 8 4-1 7-4 7-8V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>',
+  govern: SVG+'<path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/><path d="m12 3 8 5H4l8-5Z"/></svg>',
+  ops: SVG+'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>'
+};
+const ICON_FALLBACK = SVG+'<path d="m7 8 4 4-4 4"/><path d="M13 16h4"/></svg>';
+
 function tokenBanner(msg){
   let b=document.getElementById('tokbar');
   if(!b){ b=el('div',{id:'tokbar'}); b.style.cssText='background:var(--panel2);border:2px solid var(--warn);border-radius:var(--radius);padding:14px;margin:0 0 16px;'; document.getElementById('main').prepend(b); }
@@ -353,6 +420,7 @@ const runbar = document.getElementById('runbar');
 
 fetch('actions.json').then(r=>r.json()).then(d=>{
   state.cats = d.categories; state.semaphore = d.semaphore_url;
+  if(d.catalog){ document.getElementById('status-text').textContent = 'control plane online · '+d.catalog; }
   showCategories();
   if(!TOKEN) tokenBanner();
 }).catch(()=>{ screen.innerHTML='<p>Could not load actions.json. Is the control server running?</p>'; });
@@ -373,7 +441,7 @@ function showCategories(){
   const grid=el('div',{className:'grid'});
   state.cats.forEach(cat=>{
     const b=el('button',{className:'big'});
-    b.append(el('span',{className:'dot',textContent:cat.title[0]}));
+    const ic=el('span',{className:'icon'}); ic.innerHTML=ICONS[cat.key]||ICON_FALLBACK; b.append(ic);
     const wrap=el('span'); wrap.append(el('span',{textContent:cat.title}));
     wrap.append(el('span',{className:'sub',textContent:cat.options.length+' actions'}));
     b.append(wrap);
