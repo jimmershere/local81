@@ -277,6 +277,20 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Required to use --key-custody semaphore; acknowledges target creds at rest (raises L26-UI-001).")
     sema.add_argument("--local81-bin", dest="local81_bin", default="local81")
     sema.add_argument("--out-dir", dest="out_dir", default=None)
+    sema.add_argument("--catalog", dest="catalog", default=None,
+                      help="Recipe catalog (YAML) to project into survey-driven templates + dispatchers.")
+
+    n8n = ui_sub.add_parser("n8n-render", help="Render one importable n8n workflow per catalog category.")
+    n8n.add_argument("--catalog", dest="catalog", required=True,
+                     help="Recipe catalog (YAML) to project into n8n workflows.")
+    n8n.add_argument("--out-dir", dest="out_dir", default=None)
+
+    stack = ui_sub.add_parser("stack-render", help="Render a runnable Semaphore+PostgreSQL 17 stack, launcher page, and fleet compose.")
+    stack.add_argument("--catalog", dest="catalog", required=True,
+                       help="Recipe catalog (YAML) to project into the runnable stack.")
+    stack.add_argument("--db-password-ref", dest="db_password_ref", default=None,
+                       help="Secret reference for the Semaphore DB password. Never a literal.")
+    stack.add_argument("--out-dir", dest="out_dir", default=None)
 
     gc = sub.add_parser("gc", help="Prune old run directories under .local81/runs/ by count and/or age.")
     gc.add_argument("--keep", type=int, default=None, help="Keep the newest N run directories.")
@@ -360,11 +374,20 @@ def main() -> int:
                          to_url=getattr(args, "to_url", None), hmac_key_ref=getattr(args, "hmac_key_ref", None),
                          limit=getattr(args, "limit", 10), dry_run=getattr(args, "dry_run", False))
     if args.command == "ui":
-        return run_ui(args.ui_command, db_host=args.db_host, db_password_ref=args.db_password_ref,
-                      db_port=args.db_port, db_name=args.db_name, db_user=args.db_user,
-                      db_sslmode=args.db_sslmode, key_custody=args.key_custody,
-                      accept_key_custody=args.accept_key_custody, local81_bin=args.local81_bin,
-                      out_dir=args.out_dir)
+        return run_ui(
+            args.ui_command,
+            db_host=getattr(args, "db_host", None),
+            db_password_ref=getattr(args, "db_password_ref", None),
+            db_port=getattr(args, "db_port", 5432),
+            db_name=getattr(args, "db_name", "semaphore"),
+            db_user=getattr(args, "db_user", "semaphore"),
+            db_sslmode=getattr(args, "db_sslmode", "verify-full"),
+            key_custody=getattr(args, "key_custody", "local81"),
+            accept_key_custody=getattr(args, "accept_key_custody", False),
+            local81_bin=getattr(args, "local81_bin", "local81"),
+            out_dir=getattr(args, "out_dir", None),
+            catalog=getattr(args, "catalog", None),
+        )
     if args.command == "gc":
         return run_gc(keep=args.keep, max_age_days=args.max_age_days, execute=args.execute)
     parser.error(f"unsupported command: {args.command}")
