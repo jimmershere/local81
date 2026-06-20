@@ -325,15 +325,36 @@ _LAUNCHER_HTML = r"""<!doctype html>
 </div>
 
 <script>
-const TOKEN = new URLSearchParams(location.search).get('t') || '';
+// Token: take it from ?t=... if present and remember it, so a refresh or a bare
+// URL still works. Falls back to a one-time paste if it was never provided.
+const qsToken = new URLSearchParams(location.search).get('t');
+function saveTok(t){ try{ localStorage.setItem('l81_token', t); }catch(e){} }
+function readTok(){ try{ return localStorage.getItem('l81_token')||''; }catch(e){ return ''; } }
+if(qsToken){ saveTok(qsToken); }
+let TOKEN = qsToken || readTok();
 const state = { cats:[], cat:null, action:null, hosts:null, params:{}, semaphore:"" };
 const el = (t,p={})=>Object.assign(document.createElement(t),p);
+
+function tokenBanner(msg){
+  let b=document.getElementById('tokbar');
+  if(!b){ b=el('div',{id:'tokbar'}); b.style.cssText='background:var(--panel2);border:2px solid var(--warn);border-radius:var(--radius);padding:14px;margin:0 0 16px;'; document.getElementById('main').prepend(b); }
+  b.innerHTML='';
+  b.append(el('p',{textContent: msg || 'Enter your access token (it is in the URL the server printed, after ?t=).', style:'margin:0 0 10px'}));
+  const row=el('div',{className:'row'});
+  const inp=el('input',{type:'text', value:TOKEN}); inp.setAttribute('aria-label','access token');
+  inp.style.cssText='flex:1;min-height:var(--tap);padding:0 14px;border-radius:var(--radius);border:2px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;';
+  const save=el('button',{textContent:'Save token'}); save.style.cssText='width:auto;';
+  save.onclick=()=>{ TOKEN=inp.value.trim(); saveTok(TOKEN); b.remove(); };
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter') save.onclick(); });
+  row.append(inp,save); b.append(row);
+}
 const screen = document.getElementById('screen');
 const runbar = document.getElementById('runbar');
 
 fetch('actions.json').then(r=>r.json()).then(d=>{
   state.cats = d.categories; state.semaphore = d.semaphore_url;
   showCategories();
+  if(!TOKEN) tokenBanner();
 }).catch(()=>{ screen.innerHTML='<p>Could not load actions.json. Is the control server running?</p>'; });
 
 function crumbs(){
@@ -466,7 +487,14 @@ function run(){
   fetch('run',{method:'POST',headers:{'Content-Type':'application/json','X-Local81-Token':TOKEN},
     body:JSON.stringify({category:state.cat.key, action:state.action.key, hosts:state.hosts||'all',
                          params:state.params, confirm:true})})
-    .then(r=>r.json()).then(d=>{
+    .then(r=>{
+      if(r.status===401){ badge.className='badge err'; badge.textContent='401';
+        out.textContent='Access token missing or invalid. Enter it above, then press Run again.';
+        tokenBanner('Access token missing or invalid — paste the current one (from the URL after ?t=).');
+        return null; }
+      return r.json();
+    }).then(d=>{
+      if(!d) return;
       if(d.error){ badge.className='badge err'; badge.textContent='error'; out.textContent=d.error; return; }
       const ok = d.exitCode===0;
       badge.className='badge '+(ok?'ok':'err'); badge.textContent = ok?'exit 0':('exit '+d.exitCode);
