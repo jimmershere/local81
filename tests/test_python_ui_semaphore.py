@@ -194,6 +194,11 @@ def test_control_server_is_valid_python_and_gates_mutations() -> None:
     compile(server, "control_server.py", "exec")  # must be valid Python
     assert "confirmation required" in server  # mutating gate present
     assert '"127.0.0.1"' in server            # localhost-bound by default
+    # shared-token defense in depth
+    assert "X-Local81-Token" in server and "compare_digest" in server
+    assert "LOCAL81_UI_TOKEN" in server
+    # the launcher forwards the token it picks up from the URL
+    assert "X-Local81-Token" in files["launcher.html"]
 
 
 def test_actions_json_whitelist_matches_catalog() -> None:

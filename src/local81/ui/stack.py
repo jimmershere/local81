@@ -97,16 +97,20 @@ def _control_server() -> str:
 """Local-81 click-first control server (stdlib only).
 
 Serves launcher.html and, on POST /run, executes the matching dispatcher script
-on the control node. Binds 127.0.0.1 by default. Mutating actions require an
-explicit {"confirm": true}. Every (category, action) is validated against
-actions.json before anything runs, and only the pre-generated dispatch script is
-invoked (never an arbitrary command), so the web surface cannot widen what the
-CLI can already do.
+on the control node. Defense in depth: it binds 127.0.0.1 by default AND /run
+requires a shared token (the X-Local81-Token header). The token is taken from
+LOCAL81_UI_TOKEN or generated at startup and printed once; the launcher picks it
+up from the ?t=... in the URL the server prints. Mutating actions additionally
+require an explicit {"confirm": true}. Every (category, action) is validated
+against actions.json before anything runs, and only the pre-generated dispatch
+script is invoked (never an arbitrary command), so the web surface cannot widen
+what the CLI can already do.
 """
 from __future__ import annotations
 
 import json
 import os
+import secrets
 import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -114,6 +118,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ACTIONS = json.loads((HERE / "actions.json").read_text(encoding="utf-8"))
 BY_KEY = {c["key"]: c for c in ACTIONS["categories"]}
+TOKEN = os.environ.get("LOCAL81_UI_TOKEN") or secrets.token_urlsafe(24)
 
 
 def _lookup(category: str, action: str):
@@ -146,6 +151,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/run":
             return self._send(404, json.dumps({"error": "not found"}))
+        if not secrets.compare_digest(self.headers.get("X-Local81-Token", ""), TOKEN):
+            return self._send(401, json.dumps({"error": "missing or invalid token "
+                                               "(open the URL the server printed, it carries ?t=...)"}))
         try:
             length = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(length) or b"{}")
@@ -190,7 +198,9 @@ def main():
     ap.add_argument("--port", type=int, default=8181)
     args = ap.parse_args()
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"Local-81 control panel -> http://{args.host}:{args.port}  (catalog: {ACTIONS['catalog']})")
+    print(f"Local-81 control panel (catalog: {ACTIONS['catalog']})")
+    print(f"  open: http://{args.host}:{args.port}/?t={TOKEN}")
+    print("  (the ?t=... token is required to run actions; keep this URL private)")
     print("Press Ctrl-C to stop.")
     try:
         srv.serve_forever()
@@ -307,6 +317,7 @@ _LAUNCHER_HTML = r"""<!doctype html>
 </div>
 
 <script>
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
 const state = { cats:[], cat:null, action:null, hosts:null, params:{}, semaphore:"" };
 const el = (t,p={})=>Object.assign(document.createElement(t),p);
 const screen = document.getElementById('screen');
@@ -444,7 +455,7 @@ function run(){
   const badge=document.getElementById('result-badge');
   res.hidden=false; badge.textContent=''; out.textContent='Running '+summary()+' …';
   res.scrollIntoView({behavior:'smooth', block:'nearest'});
-  fetch('run',{method:'POST',headers:{'Content-Type':'application/json'},
+  fetch('run',{method:'POST',headers:{'Content-Type':'application/json','X-Local81-Token':TOKEN},
     body:JSON.stringify({category:state.cat.key, action:state.action.key, hosts:state.hosts||'all',
                          params:state.params, confirm:true})})
     .then(r=>r.json()).then(d=>{
