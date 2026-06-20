@@ -262,7 +262,7 @@ _LAUNCHER_HTML = r"""<!doctype html>
   .skip:focus{ left:8px; top:8px; }
   header{ max-width:940px; margin:0 auto; padding:22px 20px 10px; }
   .brand{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .seal{ width:60px; height:60px; flex:none; }
+  .seal{ height:76px; width:auto; flex:none; border:1px solid var(--line); border-radius:12px; background:#000; }
   .brand-words{ display:flex; flex-direction:column; gap:2px; }
   .wordmark{ font-size:1.5rem; font-weight:700; letter-spacing:.04em; }
   .wordmark .cp{ color:var(--gold); font-weight:500; letter-spacing:.02em; }
@@ -272,9 +272,6 @@ _LAUNCHER_HTML = r"""<!doctype html>
   .dot-live{ width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 0 rgba(63,185,80,.6); }
   @media (prefers-reduced-motion: no-preference){ .dot-live{ animation:pulse 2.4s infinite; } }
   @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(63,185,80,.5)} 70%{box-shadow:0 0 0 7px rgba(63,185,80,0)} 100%{box-shadow:0 0 0 0 rgba(63,185,80,0)} }
-  .hero{ max-width:940px; margin:8px auto 0; padding:0 20px; }
-  .hero img{ width:100%; max-height:150px; object-fit:cover; object-position:center 32%;
-             border:1px solid var(--line); border-radius:var(--radius); display:block; }
   main{ max-width:940px; margin:0 auto; padding:8px 20px 48px; }
   .about{ margin:16px 0 4px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); }
   .about summary{ cursor:pointer; padding:14px 18px; color:var(--gold); font-weight:500; list-style:none; }
@@ -339,7 +336,7 @@ _LAUNCHER_HTML = r"""<!doctype html>
 <a class="skip" href="#main">Skip to controls</a>
 <header>
   <div class="brand">
-    <img class="seal" src="assets/local81-logo.svg" alt="Local-81 operators union seal" onerror="this.style.display='none'">
+    <img class="seal" src="assets/local81-emblem.png" alt="Local-81 — Clem the operator, Fully Baked Orchestration, Traverse City Michigan" onerror="this.style.display='none'">
     <div class="brand-words">
       <div class="wordmark">LOCAL&#8209;81 <span class="cp">control panel</span></div>
       <div class="tag">Fully baked orchestration &middot; operators hold the line</div>
@@ -347,9 +344,6 @@ _LAUNCHER_HTML = r"""<!doctype html>
     <div class="status"><span class="dot-live" aria-hidden="true"></span> <span id="status-text">control plane online</span></div>
   </div>
 </header>
-<div class="hero">
-  <img src="assets/local81-emblem.png" alt="Local-81 — Clem the operator on a Traverse City beachhead" onerror="this.closest('.hero').style.display='none'">
-</div>
 <main id="main">
   <details class="about">
     <summary>What am I looking at?</summary>
