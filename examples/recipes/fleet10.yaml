@@ -1,0 +1,189 @@
+# Local-81 recipe catalog — the single source of truth for a fleet.
+#
+# Edit a host, a port, an action, or a menu option HERE and every operator
+# surface re-renders from it:
+#   local81 ui semaphore-render --catalog examples/recipes/fleet10.yaml  ...
+#   local81 ui n8n-render       --catalog examples/recipes/fleet10.yaml
+#   local81 ui stack-render     --catalog examples/recipes/fleet10.yaml  ...
+#
+# This catalog describes the 10-workload "BAR Exam" demo fleet, but the format
+# is generic: point the renderers at your own catalog to drive your own fleet.
+schema: local81.recipes.v1
+name: fleet10
+description: The 10-workload BAR Exam demo fleet — heterogeneous roles, one control plane.
+
+# --- Action categories ------------------------------------------------------
+# Each category is a top-level menu; each option maps to a `local81` command
+# (the tail after `local81`). These become the Semaphore survey dropdowns an
+# operator picks from — pick a category, pick an action, pick a host group.
+# `mutating: true` marks actions that change target state.
+categories:
+  - key: deploy
+    title: Deploy & Release
+    options:
+      - { key: plan,     label: "Plan — preview the steps",        command: "plan --summary" }
+      - { key: dry_run,  label: "Dry-run — show, change nothing",  command: "deploy --latest --dry-run --forks {forks}" }
+      - { key: execute,  label: "Deploy — push to the fleet",      command: "deploy --latest --forks {forks}", mutating: true }
+      - { key: check,    label: "Drift check — desired vs live",   command: "deploy --latest --check" }
+      - { key: rollback, label: "Rollback — reverse a run",        command: "rollback {run_id} --execute", mutating: true }
+
+  - key: observe
+    title: Observe
+    options:
+      - { key: status,  label: "Status — latest run at a glance", command: "status" }
+      - { key: history, label: "History — every run, on disk",    command: "history --limit 10" }
+      - { key: doctor,  label: "Fleet readiness — live probe",    command: "doctor --fleet" }
+      - { key: logs,    label: "Pull application logs",           command: "pull-logs" }
+
+  - key: audit
+    title: Audit & Receipts
+    options:
+      - { key: verify, label: "Verify the Merkle ledger",     command: "audit verify" }
+      - { key: show,   label: "Show recent ledger entries",   command: "audit show --limit 10" }
+      - { key: prove,  label: "Inclusion proof for a run",    command: "audit prove --run-id {run_id}" }
+      - { key: emit,   label: "Emit a signed receipt",        command: "audit emit --to {collector_url}" }
+
+  - key: govern
+    title: Govern
+    options:
+      - { key: compliance, label: "Compliance scan (NIST/CMS)", command: "compliance report --scope {scope}" }
+      - { key: db_doctor,  label: "Database readiness",         command: "db doctor" }
+
+  - key: ops
+    title: Ops & Housekeeping
+    options:
+      - { key: gc, label: "Prune old run artifacts", command: "gc --keep {keep}" }
+
+# --- Parameters -------------------------------------------------------------
+# Referenced by {name} in the commands above. Each becomes one survey question
+# (and one n8n input). `enum` parameters render as their own dropdown.
+parameters:
+  - { key: forks,         type: int,  default: 10 }
+  - { key: keep,          type: int,  default: 5 }
+  - { key: run_id,        type: str,  default: "" }
+  - { key: collector_url, type: str,  default: "http://localhost:8181/receipts" }
+  - { key: scope,         type: enum, default: access, choices: [access, files, all] }
+
+# --- Server groups ----------------------------------------------------------
+# The "which hosts" dropdown. Members are recipe keys.
+groups:
+  - { key: all,       label: "All 10 hosts",       members: [web, papi, napi, worker, pgdb, cache, mq, batch, cdn, jvm] }
+  - { key: web_tier,  label: "Web tier",           members: [web, cdn] }
+  - { key: api_tier,  label: "API tier",           members: [papi, napi, jvm] }
+  - { key: data_tier, label: "Data tier",          members: [pgdb, cache, mq] }
+  - { key: workers,   label: "Workers & batch",    members: [worker, batch] }
+
+# --- Recipes (the 10 roles) -------------------------------------------------
+# One block per workload. `build` drives the docker build/compose matrix;
+# `health`/`test` drive the verification matrix. Local-81 owns the deployment
+# concerns here, not the workload's internal correctness.
+recipes:
+  - key: web
+    title: Static web frontend
+    role: web
+    alias: web
+    port: 2310
+    group: web_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "python3 -m http.server 8080" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "python3 -c \"import socket; socket.create_connection(('localhost',8080),2).close()\"" }
+
+  - key: papi
+    title: Python API service
+    role: python-api
+    alias: papi
+    port: 2311
+    group: api_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "python3 -m http.server 8080" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
+
+  - key: napi
+    title: Node API service
+    role: node-api
+    alias: napi
+    port: 2312
+    group: api_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "python3 -m http.server 8080" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
+
+  - key: worker
+    title: Queue worker
+    role: queue-worker
+    alias: worker
+    port: 2313
+    group: workers
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "tail -f /dev/null" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
+
+  - key: pgdb
+    title: PostgreSQL database host
+    role: postgres-db
+    alias: pgdb
+    port: 2314
+    group: data_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils, sqlite3], workload: "tail -f /dev/null" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/health.db" }
+
+  - key: cache
+    title: Redis cache host
+    role: redis-cache
+    alias: cache
+    port: 2315
+    group: data_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "tail -f /dev/null" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
+
+  - key: mq
+    title: Message queue host
+    role: message-queue
+    alias: mq
+    port: 2316
+    group: data_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "tail -f /dev/null" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
+
+  - key: batch
+    title: Batch / cron host
+    role: batch-cron
+    alias: batch
+    port: 2317
+    group: workers
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "tail -f /dev/null" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
+
+  - key: cdn
+    title: Static CDN edge
+    role: static-cdn
+    alias: cdn
+    port: 2318
+    group: web_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "python3 -m http.server 8080" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "python3 -c \"import socket; socket.create_connection(('localhost',8080),2).close()\"" }
+
+  - key: jvm
+    title: JVM application host
+    role: jvm-app
+    alias: jvm
+    port: 2319
+    group: api_tier
+    build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "tail -f /dev/null" }
+    deploy: { target_dir: /srv/app }
+    health: { command: "cat /srv/app/VERSION | head -1" }
+    test:   { probe: "test -f /srv/app/VERSION" }
