@@ -272,6 +272,9 @@ _LAUNCHER_HTML = r"""<!doctype html>
   .dot-live{ width:9px; height:9px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 0 rgba(63,185,80,.6); }
   @media (prefers-reduced-motion: no-preference){ .dot-live{ animation:pulse 2.4s infinite; } }
   @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(63,185,80,.5)} 70%{box-shadow:0 0 0 7px rgba(63,185,80,0)} 100%{box-shadow:0 0 0 0 rgba(63,185,80,0)} }
+  .hero{ max-width:940px; margin:10px auto 0; padding:0 20px; }
+  .hero img{ width:100%; max-height:170px; object-fit:cover; object-position:center 30%;
+             border:1px solid var(--line); border-radius:var(--radius); display:block; background:#000; }
   main{ max-width:940px; margin:0 auto; padding:8px 20px 48px; }
   .about{ margin:16px 0 4px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); }
   .about summary{ cursor:pointer; padding:14px 18px; color:var(--gold); font-weight:500; list-style:none; }
@@ -344,6 +347,9 @@ _LAUNCHER_HTML = r"""<!doctype html>
     <div class="status"><span class="dot-live" aria-hidden="true"></span> <span id="status-text">control plane online</span></div>
   </div>
 </header>
+<div class="hero">
+  <img src="assets/local81-emblem.png" alt="Local-81 — Clem the operator on a Traverse City beachhead" onerror="this.closest('.hero').style.display='none'">
+</div>
 <main id="main">
   <details class="about">
     <summary>What am I looking at?</summary>
