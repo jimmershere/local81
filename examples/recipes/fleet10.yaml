@@ -87,7 +87,7 @@ recipes:
     build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "python3 -m http.server 8080" }
     deploy: { target_dir: /srv/app }
     health: { command: "cat /srv/app/VERSION | head -1" }
-    test:   { probe: "curl -fsS localhost:8080 >/dev/null" }
+    test:   { probe: "python3 -c \"import socket; socket.create_connection(('localhost',8080),2).close()\"" }
 
   - key: papi
     title: Python API service
@@ -175,7 +175,7 @@ recipes:
     build: { base: debian:12-slim, packages: [openssh-server, rsync, python3, findutils, coreutils], workload: "python3 -m http.server 8080" }
     deploy: { target_dir: /srv/app }
     health: { command: "cat /srv/app/VERSION | head -1" }
-    test:   { probe: "curl -fsS localhost:8080 >/dev/null" }
+    test:   { probe: "python3 -c \"import socket; socket.create_connection(('localhost',8080),2).close()\"" }
 
   - key: jvm
     title: JVM application host

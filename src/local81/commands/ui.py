@@ -101,11 +101,12 @@ def _run_semaphore(*, db_host, db_password_ref, db_port, db_name, db_user, db_ss
             _write(base / "semaphore-config.json", result.config)
             _write(base / "templates.json", {"templates": render.templates})
             _write(base / "render.json", render.to_dict())
-            for rel, text in render.dispatchers.items():
+            for rel, text in render.scripts().items():
                 _write_text(base / rel, text, mode=0o700)
             templ_count = len(render.templates)
             extra = f"Catalog:       {cat.name} ({len(cat.recipes)} recipes, {len(cat.categories)} categories)"
-            dispatch = f"Dispatchers:   {len(render.dispatchers)} script(s) under {base}/dispatch/"
+            dispatch = (f"Scripts:       {len(render.dispatchers)} dispatcher(s) + "
+                        f"{len(render.build_scripts)} build script(s) under {base}/")
         else:
             result = render_semaphore(
                 db_host=db_host, db_password_ref=db_password_ref, db_port=db_port,

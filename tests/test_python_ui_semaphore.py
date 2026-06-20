@@ -113,12 +113,29 @@ def _catalog():
 def test_catalog_render_has_template_per_category_plus_per_recipe() -> None:
     c = _catalog()
     r = render_semaphore_catalog(c, db_host="pg17", db_password_ref="env://X")
-    # one dispatcher template per category + one build template per recipe
+    # one dispatcher per category + one build template per recipe
     assert len(r.dispatchers) == len(c.categories)
     assert len(r.templates) == len(c.categories) + len(c.recipes)
+    # a real, runnable build script backs every build template, plus build/all.sh
+    assert len(r.build_scripts) == len(c.recipes) + 1
+    for rcp in c.recipes:
+        assert f"build/{rcp.alias}.sh" in r.build_scripts
+    assert "build/all.sh" in r.build_scripts
+    # build template playbooks point at scripts that actually exist
+    builds = [t for t in r.templates if " build: " in t["name"]]
+    assert all(t["playbook"] in r.build_scripts for t in builds)
     # backing-store posture is preserved through the catalog path
     assert r.base.config["postgres"]["password"] == "${SEMAPHORE_DB_PASSWORD}"
     assert r.base.findings == []
+
+
+def test_build_script_is_self_contained_and_idempotent() -> None:
+    c = _catalog()
+    r = render_semaphore_catalog(c, db_host="pg17", db_password_ref="env://X")
+    web = r.build_scripts["build/web.sh"]
+    assert web.startswith("#!/usr/bin/env bash")
+    assert "docker run" in web and "ROLE=" in web and "WORKLOAD=" in web
+    assert "docker image inspect" in web  # idempotent build guard
 
 
 def test_catalog_render_surveys_have_action_dropdown() -> None:
@@ -156,16 +173,40 @@ def test_n8n_one_workflow_per_category_is_expression() -> None:
 def test_stack_render_files_and_no_password_literal() -> None:
     c = _catalog()
     files = render_stack(c, db_password_ref="env://SEMAPHORE_DB_PASSWORD")
-    assert "docker-compose.semaphore.yml" in files
-    assert "launcher.html" in files
-    assert "fleet/docker-compose.fleet.yml" in files
+    # click-first surface + enterprise surface + fleet, all present
+    for f in ("control_server.py", "launcher.html", "actions.json", "start.sh",
+              "docker-compose.semaphore.yml", "fleet/docker-compose.fleet.yml"):
+        assert f in files, f
+    # dispatchers + build scripts are emitted so the server can run them
+    assert "dispatch/deploy.sh" in files and "build/web.sh" in files
     # every recipe alias + port shows up in the generated fleet compose
     fleet = files["fleet/docker-compose.fleet.yml"]
     for rcp in c.recipes:
         assert rcp.alias in fleet and str(rcp.port) in fleet
     # the compose references the placeholder, never a literal value
-    compose = files["docker-compose.semaphore.yml"]
-    assert "${SEMAPHORE_DB_PASSWORD" in compose
+    assert "${SEMAPHORE_DB_PASSWORD" in files["docker-compose.semaphore.yml"]
+
+
+def test_control_server_is_valid_python_and_gates_mutations() -> None:
+    c = _catalog()
+    files = render_stack(c, db_password_ref="env://X")
+    server = files["control_server.py"]
+    compile(server, "control_server.py", "exec")  # must be valid Python
+    assert "confirmation required" in server  # mutating gate present
+    assert '"127.0.0.1"' in server            # localhost-bound by default
+
+
+def test_actions_json_whitelist_matches_catalog() -> None:
+    c = _catalog()
+    files = render_stack(c, db_password_ref="env://X")
+    actions = json.loads(files["actions.json"])
+    assert actions["catalog"] == c.name
+    assert [a["key"] for a in actions["categories"]] == [cat.key for cat in c.categories]
+    deploy = actions["categories"][0]
+    assert deploy["scoped"] is True
+    assert any(o["mutating"] for o in deploy["options"])
+    # the launcher never falls back to a tool the minimal image lacks
+    assert "curl" not in files["launcher.html"]
 
 
 def test_run_ui_n8n_and_stack_write_artifacts(tmp_path: Path, monkeypatch, capsys) -> None:

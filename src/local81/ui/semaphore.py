@@ -27,6 +27,7 @@ from typing import Any
 
 from ..recipes import Catalog
 from ..secrets import is_secret_ref
+from .fleet_build import fleet_build_all_script, role_build_script
 
 KEY_CUSTODY_MODES = ("local81", "vault", "semaphore")
 
@@ -178,13 +179,40 @@ class CatalogRender:
 
     base: RenderResult
     templates: list[dict[str, Any]]
-    dispatchers: dict[str, str]  # relative path -> script text
+    dispatchers: dict[str, str]    # relative path -> dispatcher script text
+    build_scripts: dict[str, str]  # relative path -> per-recipe build script text
 
     def to_dict(self) -> dict:
         d = self.base.to_dict()
         d["templates"] = self.templates
         d["dispatchers"] = sorted(self.dispatchers)
+        d["build_scripts"] = sorted(self.build_scripts)
         return d
+
+    def scripts(self) -> dict[str, str]:
+        """All executable scripts to write (dispatchers + build scripts)."""
+        return {**self.dispatchers, **self.build_scripts}
+
+
+def render_catalog_scripts(
+    catalog: Catalog, local81_bin: str = "local81"
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Return ``(dispatchers, build_scripts)`` — the executable backbone shared
+    by every surface (Semaphore templates, n8n workflows, the control server).
+
+    One dispatcher per category maps survey/POST choices to a ``local81``
+    command; one build script per recipe stands a role up; ``build/all.sh``
+    brings the whole fleet up.
+    """
+    dispatchers = {
+        f"dispatch/{cat.key}.sh": _dispatcher_script(catalog, cat, local81_bin)
+        for cat in catalog.categories
+    }
+    build_scripts = {
+        f"build/{r.alias}.sh": role_build_script(catalog, r) for r in catalog.recipes
+    }
+    build_scripts["build/all.sh"] = fleet_build_all_script(catalog)
+    return dispatchers, build_scripts
 
 
 def render_semaphore_catalog(
@@ -212,21 +240,19 @@ def render_semaphore_catalog(
         local81_bin=local81_bin, project_name=catalog.name,
     )
 
-    templates: list[dict[str, Any]] = []
-    dispatchers: dict[str, str] = {}
+    dispatchers, build_scripts = render_catalog_scripts(catalog, local81_bin)
 
+    templates: list[dict[str, Any]] = []
     for cat in catalog.categories:
-        script_path = f"dispatch/{cat.key}.sh"
-        dispatchers[script_path] = _dispatcher_script(catalog, cat, local81_bin)
         templates.append({
             "name": f"{catalog.name}: {cat.title}",
             "type": "bash",
-            "playbook": script_path,
+            "playbook": f"dispatch/{cat.key}.sh",
             "description": f"Pick an action and a host group; runs the matching `{local81_bin}` command.",
             "survey_vars": _survey_vars(catalog, cat),
         })
-
-    # One build template per recipe — stands the role's image/workload up.
+    # One build template per recipe, each backed by a real, self-contained
+    # build script (so the template button actually stands the role up).
     for r in catalog.recipes:
         templates.append({
             "name": f"{catalog.name} build: {r.alias} ({r.title})",
@@ -238,7 +264,8 @@ def render_semaphore_catalog(
 
     # Replace the base's placeholder templates with the catalog-driven set.
     base.config["_local81"]["catalog"] = catalog.name
-    return CatalogRender(base=base, templates=templates, dispatchers=dispatchers)
+    return CatalogRender(base=base, templates=templates, dispatchers=dispatchers,
+                         build_scripts=build_scripts)
 
 
 def _survey_vars(catalog: Catalog, cat) -> list[dict[str, Any]]:

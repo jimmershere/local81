@@ -87,23 +87,47 @@ render writes `templates.json` (import these), `dispatch/*.sh`, and the usual
 
 ## Runnable stack — `ui stack-render`
 
-For a turnkey demo, `stack-render` emits a directory you can bring up directly:
+For a turnkey, functional-out-of-the-box surface, `stack-render` emits a
+self-contained directory with **two ways to drive the same CLI**:
 
 ```bash
 local81 ui stack-render --catalog examples/recipes/fleet10.yaml \
   --db-password-ref env://SEMAPHORE_DB_PASSWORD
 cd .local81/ui/stack
-cp .env.example .env          # fill blanks from your secret references
-docker compose -f docker-compose.semaphore.yml --env-file .env up -d
-open launcher.html            # the friendly landing page
+./start.sh                    # or ./start.sh --with-fleet  (also builds the demo hosts)
+# open http://127.0.0.1:8080
 ```
 
-It contains the Semaphore + **PostgreSQL 17** compose, a `.env.example` whose
-credentials are all placeholders (never literals), a static **launcher page**
-rendered from the catalog (categories as cards, host groups as chips, a
-4-step "pick → fill → Run" guide), an `import.sh` helper, and
-`fleet/docker-compose.fleet.yml` — the catalog's roles as buildable containers,
-so there's a real fleet to deploy to.
+### Push-button control panel (click-first, no typing)
+
+`control_server.py` is a stdlib HTTP server (binds `127.0.0.1`) that serves
+`launcher.html` — an accessibility-first, click-through panel built for operators
+who would rather click than type. Pick a category, an action, and a host group
+by tapping large buttons; numeric options are `+`/`−` steppers and choices are
+buttons, so the only thing you ever type is a rollback run-id. Actions that
+change hosts ask for a one-tap confirmation; output comes back in the page.
+
+On a button press the server runs the matching `dispatch/<category>.sh` — i.e.
+the exact `local81` command you could type by hand. It validates every
+`(category, action)` against `actions.json` and only ever invokes the
+pre-generated dispatcher, so the web layer cannot do more than the CLI already
+can. The launcher is fully keyboard-operable, high-contrast, honours
+`prefers-reduced-motion`, and exposes an `aria-live` results region.
+
+### Multi-user option (Semaphore + PostgreSQL 17)
+
+The same directory ships the Semaphore + **PostgreSQL 17** compose and a
+`.env.example` whose credentials are all placeholders (never literals), for when
+you need RBAC / LDAP / OIDC. Import the survey templates from
+`ui semaphore-render`.
+
+### The fleet + build scripts
+
+`fleet/docker-compose.fleet.yml` plus `build/<alias>.sh` (one per recipe, and
+`build/all.sh`) build the catalog's roles as real containers — a self-contained,
+idempotent `docker build` + `docker run` per role, with the role's workload
+injected from the catalog. These are the scripts the Semaphore *build templates*
+reference, so a build button actually stands a host up.
 
 ## n8n orchestration
 
