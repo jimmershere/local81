@@ -1,0 +1,100 @@
+{
+  "name": "Local-81 Log Guard (untrusted-log gate)",
+  "meta": {
+    "description": "Webhook-triggered guard for untrusted log/error payloads (e.g. forwarded from Sentry or an error-tracking webhook). Persists the payload, runs `local81 scan --json` (Merkle integrity + injection scanning) on the control node, and branches: high-severity injection is quarantined and alerted; clean payloads are sanitized and forwarded. The point: nothing reaches a downstream AI agent / MCP context until it has passed Local-81 Log Guard. Requires `local81` on PATH on the control node; optionally set LOCAL81_DIR and the ALERT_URL / FORWARD_URL credentials."
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "local81-log-guard",
+        "responseMode": "lastNode"
+      },
+      "name": "Trigger (untrusted log)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Persist the untrusted payload to a temp file. We never interpolate the\n// log text into a shell command — the scanner reads it from disk.\nconst fs = require('fs');\nconst os = require('os');\nconst path = require('path');\nconst body = $json.body || {};\nconst raw = typeof body.log === 'string' ? body.log : JSON.stringify(body, null, 2);\nconst dir = fs.mkdtempSync(path.join(os.tmpdir(), 'log81-guard-'));\nconst file = path.join(dir, 'incoming.log');\nfs.writeFileSync(file, raw, 'utf8');\nreturn [{ json: { dir, file } }];"
+      },
+      "name": "Persist payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd ${LOCAL81_DIR:-/srv/local81} && local81 scan \"{{ $json[\"dir\"] }}\" --write-manifest --json --fail-on high"
+      },
+      "name": "Log Guard scan",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            { "value1": "={{ $json[\"exitCode\"] }}", "operation": "equal", "value2": 0 }
+          ]
+        }
+      },
+      "name": "Clean?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd ${LOCAL81_DIR:-/srv/local81} && local81 scan \"{{ $node[\"Persist payload\"].json[\"file\"] }}\" --sanitize-to \"{{ $node[\"Persist payload\"].json[\"dir\"] }}/sanitized\" --quiet --fail-on never && cat \"{{ $node[\"Persist payload\"].json[\"dir\"] }}/sanitized/incoming.log\""
+      },
+      "name": "Sanitize (clean path)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FORWARD_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: \"clean\", sanitized: $json[\"stdout\"] }) }}",
+        "options": {}
+      },
+      "name": "Forward sanitized",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1440, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ALERT_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: \"injection_detected\", action: \"quarantined\", report: $node[\"Log Guard scan\"].json[\"stdout\"] }) }}",
+        "options": {}
+      },
+      "name": "Quarantine + alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1200, 420]
+    }
+  ],
+  "connections": {
+    "Trigger (untrusted log)": { "main": [[{ "node": "Persist payload", "type": "main", "index": 0 }]] },
+    "Persist payload": { "main": [[{ "node": "Log Guard scan", "type": "main", "index": 0 }]] },
+    "Log Guard scan": { "main": [[{ "node": "Clean?", "type": "main", "index": 0 }]] },
+    "Clean?": {
+      "main": [
+        [{ "node": "Sanitize (clean path)", "type": "main", "index": 0 }],
+        [{ "node": "Quarantine + alert", "type": "main", "index": 0 }]
+      ]
+    },
+    "Sanitize (clean path)": { "main": [[{ "node": "Forward sanitized", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}

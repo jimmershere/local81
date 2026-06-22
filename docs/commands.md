@@ -289,6 +289,37 @@ integrity.
 
 ---
 
+## `local81 scan`
+
+Merkle integrity + injection scan for untrusted log data. A standalone gateway
+over the same `log_safety` engine that guards `pull-logs` / `diag` / `logs`, so
+it is reusable from CI, an n8n node, a Claude Code skill, or the bundled MCP
+server. It never executes anything it finds.
+
+| Flag | Description |
+|---|---|
+| `paths...` | Files or directories to scan |
+| `--manifest-dir DIR` | Directory whose integrity manifest to write/verify |
+| `--write-manifest` | Write a Merkle integrity manifest over the directory |
+| `--verify` | Verify content against an existing integrity manifest |
+| `--sanitize-to PATH` | Write sanitized (inert) copies of scanned files |
+| `--json` | Emit a machine-readable JSON report |
+| `--fail-on {never,warn,high}` | Minimum severity that exits non-zero (default `high`) |
+| `--quiet` | Suppress human-readable output |
+
+Exit codes: `0` clean, `3` injection findings at/above the threshold, `4`
+integrity failure. Example as a CI gate over collected logs:
+
+```bash
+local81 scan .local81/pulled-logs --verify --fail-on high
+```
+
+See `integrations/` for the n8n Log Guard workflow, the Claude Desktop MCP
+server, and the `log-guard` Claude Code skill that wrap this engine, and
+`SECURITY.md` → "Untrusted log data".
+
+---
+
 ## `local81 diff`
 
 Compares two generated plan files.
