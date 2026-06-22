@@ -19,6 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`logs`) verifies content against the manifest and sanitizes terminal
   escapes, hidden/bidi Unicode, and prompt-injection phrasing before display,
   so log data is never consumed raw ("Agentjacking" hardening).
+- Expanded the injection heuristics to cover common AI-agentic attack vectors:
+  instruction override, jailbreak/persona, system/role-marker spoofing,
+  tool-call / MCP manipulation, secret exfiltration, RCE / package-install
+  (`curl | sh`, pip/npm/...), base64 & hex obfuscation, link injection, and
+  social-engineering authorization claims. Findings now carry a severity
+  (`warn` / `high`).
+- `local81 scan` command: a standalone Merkle-integrity + injection-scan
+  gateway over `log_safety` (write/verify manifest, sanitize copies, JSON
+  report, `--fail-on` severity gate) — reusable from CI and integrations.
+- `integrations/mcp/local81_log_guard.py`: a stdlib-only MCP server (Claude
+  Desktop / Cursor) exposing `safe_read`, `scan_log`, `verify_integrity`, and
+  `write_manifest`, so an agent reads logs through the guard instead of raw.
+- `n8n/local81-log-guard.workflow.json`: a webhook gate that scans inbound
+  untrusted log/error payloads and quarantines injection before forwarding.
+- `.claude/skills/log-guard/SKILL.md`: a Claude Code skill for safely
+  investigating logs/crash reports without acting on injected instructions.
+- `site/portwright/ai-it-alerts.html`: editorial AI/IT security-alerts page
+  artifact (Agentjacking explainer + remediation checklist) for portwright.io.
+- `marketing/social-ad-local81-log-guard.md`: launch copy (drafts only;
+  publishing/spend deferred to a human).
 
 ### Security
 - Treat logs collected from remote hosts as an untrusted input channel.

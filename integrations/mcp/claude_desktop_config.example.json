@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "local81-log-guard": {
+      "command": "python3",
+      "args": ["/abs/path/to/local81/integrations/mcp/local81_log_guard.py"]
+    }
+  }
+}

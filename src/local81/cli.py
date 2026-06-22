@@ -17,6 +17,7 @@ from .commands.hooks import run_hooks
 from .commands.init import run_init
 from .commands.keys import run_keys
 from .commands.logs import run_logs
+from .commands.scan import run_scan
 from .commands.onboard import run_onboard
 from .commands.plan import run_plan
 from .commands.profiles import run_profile_create, run_profiles
@@ -221,6 +222,17 @@ def build_parser() -> argparse.ArgumentParser:
     logs.add_argument("run_id")
     logs.add_argument("--host", default=None, help="Show the per-host log for a single fleet host.")
 
+    scan = sub.add_parser("scan", help="Merkle integrity + injection scan for untrusted log data.")
+    scan.add_argument("paths", nargs="*", help="Files or directories to scan.")
+    scan.add_argument("--manifest-dir", default=None, help="Directory whose integrity manifest to write/verify.")
+    scan.add_argument("--write-manifest", action="store_true", help="Write a Merkle integrity manifest over the directory.")
+    scan.add_argument("--verify", action="store_true", help="Verify content against an existing integrity manifest.")
+    scan.add_argument("--sanitize-to", default=None, help="Write sanitized copies of scanned files under this path.")
+    scan.add_argument("--json", dest="as_json", action="store_true", help="Emit a machine-readable JSON report.")
+    scan.add_argument("--fail-on", choices=["never", "warn", "high"], default="high",
+                      help="Minimum severity that makes the command exit non-zero (default: high).")
+    scan.add_argument("--quiet", action="store_true", help="Suppress human-readable output.")
+
     diff = sub.add_parser("diff", help="Compare two deployment plan files.")
     diff.add_argument("plan_a")
     diff.add_argument("plan_b")
@@ -362,6 +374,10 @@ def main() -> int:
                         include_disabled=args.include_disabled, dry_run=args.dry_run)
     if args.command == "logs":
         return run_logs(args.run_id, host=args.host)
+    if args.command == "scan":
+        return run_scan(args.paths, manifest_dir=args.manifest_dir, write_manifest=args.write_manifest,
+                        verify=args.verify, sanitize_to=args.sanitize_to, as_json=args.as_json,
+                        fail_on=args.fail_on, quiet=args.quiet)
     if args.command == "diff":
         return run_diff(args.plan_a, args.plan_b)
     if args.command == "schedule":

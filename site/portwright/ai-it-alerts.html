@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI / IT Security Alerts — Portwright</title>
+<meta name="description" content="Editorial security alerts and remediation guidance on AI-agent threats, including Agentjacking / log-injection against AI coding agents.">
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #171f29;
+    --panel-2: #1d2733;
+    --ink: #e7edf3;
+    --muted: #a4b1c0;
+    --line: #2a3845;
+    --accent: #4ea1ff;
+    --accent-ink: #06243f;
+    --warn: #ffb454;
+    --good: #5dd1a4;
+    --maxw: 920px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+
+  /* Header / nav */
+  header.site {
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .navbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    max-width: var(--maxw);
+    margin: 0 auto;
+  }
+  .brand {
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.2px;
+    color: var(--ink);
+    text-decoration: none;
+    margin-right: auto;
+  }
+  .brand span { color: var(--accent); }
+  nav.site ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 15px;
+  }
+  nav.site a { color: var(--muted); text-decoration: none; }
+  nav.site a:hover { color: var(--ink); }
+
+  /* Hero */
+  .hero {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #16202b 0%, var(--bg) 100%);
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 12px;
+  }
+  .hero h1 {
+    margin: 0 0 14px;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.15;
+  }
+  .hero p.lede {
+    margin: 0;
+    max-width: 64ch;
+    color: var(--muted);
+    font-size: 18px;
+  }
+  .pagemeta {
+    margin-top: 22px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  /* Sections */
+  main section { padding: 44px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: clamp(22px, 3.5vw, 30px); margin: 0 0 8px; }
+  h3 { font-size: 19px; margin: 22px 0 6px; }
+  .section-sub { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+
+  /* Alert card */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .card.featured { border-left: 4px solid var(--warn); }
+  .card .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px;
+  }
+  .tag {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .tag.sev { background: #3a2410; color: var(--warn); border-color: #5a3a16; }
+  .card h3 { margin-top: 0; font-size: 22px; }
+  .card .byline { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+
+  /* Checklist */
+  ul.checklist { list-style: none; margin: 0; padding: 0; }
+  ul.checklist li {
+    position: relative;
+    padding: 14px 14px 14px 46px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    margin-bottom: 12px;
+  }
+  ul.checklist li::before {
+    content: "\2713";
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    border-radius: 6px;
+    background: rgba(93,209,164,0.15);
+    color: var(--good);
+    font-weight: 800;
+    font-size: 14px;
+  }
+  ul.checklist li strong { display: block; margin-bottom: 2px; }
+  ul.checklist li span { color: var(--muted); }
+
+  /* Controls grid */
+  .controls { display: grid; gap: 16px; }
+  @media (min-width: 720px) { .controls { grid-template-columns: 1fr 1fr; } }
+  .control {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .control h3 { margin-top: 0; }
+  .control .label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .control ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted); }
+  .control ul li { margin-bottom: 4px; }
+
+  .callout {
+    margin-top: 22px;
+    border: 1px solid #5a3a16;
+    background: #261a0c;
+    border-left: 4px solid var(--warn);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .callout strong { color: var(--warn); }
+
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 14px;
+  }
+
+  footer.site {
+    padding: 32px 0 48px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  footer.site .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; }
+  footer.site .legal { margin-left: auto; max-width: 60ch; }
+
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--accent);
+    color: var(--accent-ink);
+    padding: 10px 14px;
+    border-radius: 0 0 8px 0;
+    font-weight: 700;
+  }
+  .skip:focus { left: 0; z-index: 100; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+
+<header class="site">
+  <div class="navbar">
+    <a class="brand" href="/">port<span>wright</span>.io</a>
+    <nav class="site" aria-label="Primary">
+      <ul>
+        <li><a href="#news">Alerts</a></li>
+        <li><a href="#resolve">How to resolve</a></li>
+        <li><a href="#logguard">Log Guard</a></li>
+        <li><a href="/">Home</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap">
+    <p class="eyebrow">AI / IT Security Alerts</p>
+    <h1 id="hero-title">Threats to AI coding agents, and how to shut them down</h1>
+    <p class="lede">
+      Editorial briefings on emerging risks where AI and IT operations meet — written
+      for operators and developers who need to act, not just read. This edition covers
+      <strong>Agentjacking</strong>: prompt-injection smuggled through logs and error reports
+      to hijack AI coding agents.
+    </p>
+    <p class="pagemeta">
+      <span class="badge">Editorial &middot; Educational</span>
+      &nbsp; Published <time datetime="2026-06-22">2026-06-22</time>
+    </p>
+  </div>
+</section>
+
+<main id="main">
+
+  <section id="news" aria-labelledby="news-title">
+    <div class="wrap">
+      <h2 id="news-title">Alerts in the news</h2>
+      <p class="section-sub">
+        Current items we are tracking. Summaries are paraphrased for operators; we do not
+        reproduce vendor advisories or assign severity scores of our own.
+      </p>
+
+      <article class="card featured" aria-labelledby="alert-1">
+        <div class="tags">
+          <span class="tag sev">Active threat class</span>
+          <span class="tag">Prompt injection</span>
+          <span class="tag">AI coding agents</span>
+          <span class="tag">Supply-chain risk</span>
+        </div>
+        <h3 id="alert-1">Agentjacking: log injection turns your AI agent into the attacker's hands</h3>
+        <p class="byline">
+          Filed <time datetime="2026-06-22">2026-06-22</time> &middot; Source: security researchers reported this technique publicly; details paraphrased.
+        </p>
+
+        <p>
+          Security researchers have described an attack pattern they call
+          <strong>"Agentjacking"</strong> — a form of <strong>indirect prompt injection</strong>
+          that targets AI coding agents such as Claude Code, Cursor, and similar tools.
+        </p>
+
+        <h4>How it works, in plain language</h4>
+        <ol>
+          <li>
+            An attacker plants <strong>malicious instructions disguised as ordinary data</strong> —
+            for example, by submitting a crafted error to a publicly reachable telemetry endpoint
+            (a leaked or public Sentry DSN is one reported avenue). The poisoned text now lives in
+            your logs or error reports alongside legitimate entries.
+          </li>
+          <li>
+            Later, a developer asks their AI agent something innocent like
+            <em>"look into these errors for me."</em> The agent pulls the logs — often through an
+            <strong>MCP server</strong> or an API — and reads the attacker's text as part of its context.
+          </li>
+          <li>
+            Because today's LLMs <strong>do not reliably separate data from instructions</strong>,
+            the agent can treat the injected text as a command rather than as content to analyze.
+            If the agent has tools wired up, it may then <strong>run shell commands, install
+            packages, or make outbound network requests</strong> on the attacker's behalf.
+          </li>
+        </ol>
+
+        <p>
+          The root cause is structural: agents <strong>implicitly trust</strong> the logs, MCP responses,
+          and API output they consume. Anything that text touches an LLM context window becomes a
+          potential instruction channel. That is what makes this a <em>class</em> of attack rather
+          than a single bug — and why the fix is defensive architecture, not a one-off patch.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section id="resolve" aria-labelledby="resolve-title">
+    <div class="wrap">
+      <h2 id="resolve-title">How to resolve</h2>
+      <p class="section-sub">
+        An actionable checklist drawn from current best practice. Treat these as layered defenses —
+        no single item is sufficient on its own.
+      </p>
+      <ul class="checklist">
+        <li>
+          <strong>Sandbox your agents strictly.</strong>
+          <span>Run AI coding agents inside containers or VMs with least-privilege access, so a
+          hijacked agent cannot reach production credentials, secrets, or the wider network.</span>
+        </li>
+        <li>
+          <strong>Treat MCP and API output as zero-trust user content.</strong>
+          <span>Logs, MCP responses, and third-party API data are untrusted input — never privileged
+          instructions. Assume any of it may be attacker-controlled.</span>
+        </li>
+        <li>
+          <strong>Keep a human in the loop for risky actions.</strong>
+          <span>Require explicit human confirmation before the agent installs packages, executes
+          shell commands, or makes outbound network requests.</span>
+        </li>
+        <li>
+          <strong>Sanitize and normalize input before it reaches the LLM.</strong>
+          <span>Strip ANSI/terminal escape sequences, remove invisible and bidirectional Unicode,
+          and fold homoglyphs so hidden instructions cannot survive into the model's context.</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="logguard" aria-labelledby="lg-title">
+    <div class="wrap">
+      <h2 id="lg-title">Local-81 Log Guard</h2>
+      <p class="section-sub">
+        We just shipped a security capability in <strong>Local-81</strong>, an open-source,
+        push-based deploy and runbook control-plane CLI. The capability is called
+        <strong>Log Guard</strong>, and it applies two complementary controls to logs before an
+        AI agent ever consumes them.
+      </p>
+
+      <div class="controls">
+        <div class="control">
+          <p class="label">Control 1 &middot; Tamper-evidence</p>
+          <h3>Merkle integrity</h3>
+          <p>
+            At capture time, Log Guard writes a <strong>SHA-256-per-file manifest</strong> bound
+            under a single <strong>RFC&nbsp;6962 Merkle root</strong>. Before any log is consumed,
+            the manifest is re-verified.
+          </p>
+          <ul>
+            <li>Proves bytes are <strong>unchanged since capture</strong>.</li>
+            <li>Detects after-the-fact tampering or substitution.</li>
+            <li>Gives a portable, auditable proof of integrity.</li>
+          </ul>
+        </div>
+
+        <div class="control">
+          <p class="label">Control 2 &middot; The one that stops injection</p>
+          <h3>Injection scanning + sanitization</h3>
+          <p>
+            Log Guard strips or neutralizes the smuggling vectors attackers rely on, and flags
+            content that reads like an instruction rather than a log line.
+          </p>
+          <ul>
+            <li>Strips ANSI / terminal escape sequences.</li>
+            <li>Removes invisible / bidi Unicode and "tag char" smuggling.</li>
+            <li>Flags instruction-override and jailbreak / persona phrasing.</li>
+            <li>Flags role-marker spoofing and tool-call markup.</li>
+            <li>Flags secret-exfiltration, package-install / <code>curl | sh</code> RCE patterns.</li>
+            <li>Flags base64 / obfuscation and link injection.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout" role="note">
+        <p style="margin:0">
+          <strong>Honest caveat:</strong> a Merkle / integrity check does <em>not</em>, by itself,
+          stop injection. A maliciously crafted log submitted through a legitimate channel is
+          faithfully recorded and will hash perfectly fine — integrity proves the bytes were not
+          altered, not that the bytes are safe. The control that actually defends against
+          Agentjacking is <strong>injection scanning + sanitization</strong>. Integrity and
+          sanitization solve different problems, and you want both.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div>
+      &copy; <time datetime="2026">2026</time> portwright.io
+      &middot; AI / IT Security Alerts
+    </div>
+    <p class="legal">
+      This is an editorial / educational page. It paraphrases publicly reported security research
+      and does not constitute a vendor advisory, legal advice, or a guarantee of protection. No
+      specific CVEs, vendor statements, or statistics are asserted here. Last updated
+      <time datetime="2026-06-22">2026-06-22</time>.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

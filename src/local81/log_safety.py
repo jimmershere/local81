@@ -71,32 +71,130 @@ _HIDDEN_CODEPOINTS = (
 _HIDDEN_RE = re.compile("[" + re.escape(_HIDDEN_CODEPOINTS) + "]")
 _TAG_RE = re.compile(r"[\U000e0000-\U000e007f]")
 
-# Heuristic prompt-injection phrasing. These are *flagged*, never deleted: the
-# operator should still see the original text, but a warning makes clear it is
-# attacker-controlled and must not be treated as an instruction.
-_INJECTION_PHRASES = [
-    (re.compile(r"ignore\s+(?:all\s+|any\s+)?(?:previous|prior|above)\s+instructions", re.I),
-     "prompt-injection: 'ignore previous instructions'"),
-    (re.compile(r"disregard\s+(?:the\s+)?(?:above|previous|prior)", re.I),
-     "prompt-injection: 'disregard the above'"),
-    (re.compile(r"you\s+are\s+now\s+(?:a|an|the)\b", re.I),
-     "prompt-injection: role reassignment ('you are now ...')"),
-    (re.compile(r"\bnew\s+(?:system\s+)?instructions?\b", re.I),
-     "prompt-injection: 'new instructions'"),
+# Heuristic injection phrasing for AI agentic workflows. Each entry is
+# (pattern, label, severity). These are *flagged*, never deleted: the operator
+# (or downstream agent) should still see the original text, but a warning marks
+# it as attacker-controllable and not to be treated as an instruction. The list
+# is intentionally broad — best-effort, easy to extend — and covers the common
+# vectors against AI coding agents / MCP-fed contexts. ``high`` marks patterns
+# that essentially never occur in benign log output; ``warn`` marks ambiguous
+# ones that can have false positives.
+_INJECTION_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+    # --- instruction override -------------------------------------------
+    (re.compile(r"ignore\s+(?:all\s+|any\s+|the\s+)*(?:previous|prior|above|earlier|preceding)\s+(?:instructions?|prompts?|messages?|context|directions?)", re.I),
+     "prompt-injection: 'ignore previous instructions'", "high"),
+    (re.compile(r"disregard\s+(?:all\s+|the\s+|any\s+)*(?:above|previous|prior|earlier|preceding)", re.I),
+     "prompt-injection: 'disregard the above'", "high"),
+    (re.compile(r"forget\s+(?:all\s+|everything\s+)*(?:above|previous|prior|what\s+you|that\s+you)", re.I),
+     "prompt-injection: 'forget previous'", "high"),
+    (re.compile(r"\bnew\s+(?:system\s+|important\s+|updated\s+)?instructions?\b", re.I),
+     "prompt-injection: 'new instructions'", "high"),
+    (re.compile(r"\boverride\b[^.\n]{0,40}\b(?:instructions?|rules?|policy|policies|guidelines?|safety|restrictions?)", re.I),
+     "prompt-injection: override instructions/safety", "high"),
+    (re.compile(r"do\s+not\s+(?:follow|obey|adhere\s+to|tell)\b[^.\n]{0,40}(?:guidelines?|rules?|policy|policies|instructions?|user|anyone)", re.I),
+     "prompt-injection: 'do not follow guidelines'", "high"),
+    (re.compile(r"this\s+(?:instruction|message|directive|takes?)\s+(?:takes\s+priority|overrides|supersedes|is\s+more\s+important)", re.I),
+     "prompt-injection: priority/override claim", "high"),
+
+    # --- role / persona / jailbreak ------------------------------------
+    (re.compile(r"you\s+are\s+now\s+(?:a|an|the|in|operating|running)\b", re.I),
+     "prompt-injection: role reassignment ('you are now ...')", "high"),
+    (re.compile(r"\b(?:act|behave|respond|roleplay)\s+as\s+(?:a|an|if|though|the)\b", re.I),
+     "prompt-injection: role-play coercion ('act as ...')", "warn"),
+    (re.compile(r"\bpretend\s+(?:to\s+be|that\s+you|you(?:'| a)re)\b", re.I),
+     "prompt-injection: 'pretend to be'", "warn"),
+    (re.compile(r"\b(?:DAN|do\s+anything\s+now)\b"),
+     "prompt-injection: DAN jailbreak", "high"),
+    (re.compile(r"\bdeveloper\s+mode\b", re.I),
+     "prompt-injection: 'developer mode' jailbreak", "high"),
+    (re.compile(r"\bjail\s?break", re.I),
+     "prompt-injection: jailbreak keyword", "high"),
+    (re.compile(r"\b(?:without|with\s+no|ignore\s+(?:any|all))\s+(?:any\s+)?(?:restrictions?|filters?|limitations?|guardrails?|safety|rules?)\b", re.I),
+     "prompt-injection: 'without restrictions'", "high"),
+    (re.compile(r"\bunrestricted\b[^.\n]{0,20}\b(?:mode|assistant|ai|model|access)\b", re.I),
+     "prompt-injection: 'unrestricted mode'", "high"),
+
+    # --- system / role-marker spoofing ---------------------------------
     (re.compile(r"\bsystem\s+prompt\b", re.I),
-     "prompt-injection: references the system prompt"),
-    (re.compile(r"\b(?:run|execute)\s+the\s+following\b", re.I),
-     "prompt-injection: 'run/execute the following'"),
+     "prompt-injection: references the system prompt", "warn"),
+    (re.compile(r"<\|?\s*(?:im_start|im_end|system|assistant|user|endoftext)\s*\|?>", re.I),
+     "prompt-injection: chat/role control token", "high"),
+    (re.compile(r"^\s*(?:###\s*)?(?:system|assistant|developer)\s*:\s*\S", re.I | re.M),
+     "prompt-injection: spoofed role marker (System:/Assistant:)", "warn"),
+    (re.compile(r"\[/?(?:system|inst|sys)\]", re.I),
+     "prompt-injection: bracketed role/instruction tag", "high"),
+    (re.compile(r"\b(?:begin|end)\s+(?:of\s+)?system\s+(?:prompt|message|instructions?)\b", re.I),
+     "prompt-injection: system block delimiter", "high"),
+
+    # --- tool / function / agent (MCP) manipulation --------------------
+    (re.compile(r"\b(?:call|invoke|use|trigger|run)\s+the\s+\w+\s+(?:tool|function|api|command|mcp)\b", re.I),
+     "agent-manipulation: tool/function invocation directive", "high"),
+    (re.compile(r"<\s*(?:tool_call|function_call|tool_use|invoke|antml:invoke)\b", re.I),
+     "agent-manipulation: tool-call markup", "high"),
+    (re.compile(r"\b(?:run|execute|perform)\s+the\s+following\b", re.I),
+     "agent-manipulation: 'run/execute the following'", "high"),
+    (re.compile(r"\bas\s+a\s+(?:diagnostic|resolution|remediation|fix|repair|recovery)\s+step\b", re.I),
+     "agent-manipulation: fake 'diagnostic/resolution step' (Agentjacking)", "high"),
+    (re.compile(r"\b(?:recommended|suggested|required|automatic)\s+(?:fix|remediation|action|command|resolution)\s*:", re.I),
+     "agent-manipulation: fake 'recommended fix:' directive", "high"),
+
+    # --- secret / data exfiltration ------------------------------------
+    (re.compile(r"\b(?:exfiltrate|leak|reveal|disclose|print|dump|send|email|post)\b[^.\n]{0,40}\b(?:secret|password|token|api[_ -]?key|credential|private\s+key|env(?:ironment)?\s+var)", re.I),
+     "exfiltration: secret/credential disclosure directive", "high"),
+    (re.compile(r"\b(?:cat|type|read|show|print|copy)\b[^.\n]{0,30}(?:/etc/passwd|/etc/shadow|\.ssh/|\.env\b|id_rsa|\.aws/credentials|\.npmrc|\.git-credentials)", re.I),
+     "exfiltration: reads a sensitive file", "high"),
+    (re.compile(r"\b(?:print|reveal|show|repeat|output|disclose)\b[^.\n]{0,30}\b(?:system\s+prompt|your\s+(?:instructions?|rules?|prompt)|initial\s+prompt)", re.I),
+     "exfiltration: system-prompt disclosure", "high"),
+    (re.compile(r"\b(?:POST|send|upload|exfil(?:trate)?|beacon)\b[^.\n]{0,40}\bhttps?://", re.I),
+     "exfiltration: send data to external URL", "high"),
+
+    # --- remote code execution / package install -----------------------
     (re.compile(r"\b(?:pip|pipx|uv)\s+install\b", re.I),
-     "suspicious directive: package install (pip)"),
-    (re.compile(r"\bnpm\s+(?:install|i|exec)\b|\bnpx\b", re.I),
-     "suspicious directive: package install (npm/npx)"),
-    (re.compile(r"\bcurl\b[^\n|]*\|\s*(?:ba|z|d)?sh\b", re.I),
-     "suspicious directive: curl-pipe-to-shell"),
-    (re.compile(r"\bwget\b[^\n|]*\|\s*(?:ba|z|d)?sh\b", re.I),
-     "suspicious directive: wget-pipe-to-shell"),
+     "suspicious directive: package install (pip)", "high"),
+    (re.compile(r"\bnpm\s+(?:install|i|exec)\b|\bnpx\s+\S", re.I),
+     "suspicious directive: package install (npm/npx)", "high"),
+    (re.compile(r"\b(?:gem\s+install|cargo\s+install|go\s+install|apt(?:-get)?\s+install|yum\s+install|dnf\s+install|brew\s+install)\b", re.I),
+     "suspicious directive: package install", "high"),
+    (re.compile(r"\b(?:curl|wget|fetch)\b[^\n|]{0,200}\|\s*(?:ba|z|d|fi|c)?sh\b", re.I),
+     "suspicious directive: download-pipe-to-shell", "high"),
+    (re.compile(r"\b(?:bash|sh|zsh)\s+-c\b|\beval\s*\(|\bos\.system\s*\(|\bsubprocess\.(?:Popen|run|call)\s*\(", re.I),
+     "suspicious directive: shell/eval execution", "high"),
+    (re.compile(r"\bpowershell\b[^\n]{0,40}-(?:enc(?:odedcommand)?|nop|noprofile|w\s+hidden|windowstyle\s+hidden)\b", re.I),
+     "suspicious directive: obfuscated PowerShell", "high"),
+    (re.compile(r"\b(?:Invoke-WebRequest|iwr\s|certutil\b[^\n]{0,40}-urlcache|bitsadmin\b|mshta\b)", re.I),
+     "suspicious directive: Windows download cradle", "high"),
+    (re.compile(r"\bnc\b[^\n]{0,20}-e\b|\b/dev/tcp/\d", re.I),
+     "suspicious directive: reverse shell", "high"),
+    (re.compile(r"\brm\s+-rf\s+(?:/|~|\$HOME|\*)", re.I),
+     "suspicious directive: destructive rm -rf", "high"),
+    (re.compile(r"\bchmod\s+(?:\+x|0?777)\b", re.I),
+     "suspicious directive: chmod +x/777", "warn"),
+
+    # --- encoding / obfuscation ----------------------------------------
+    (re.compile(r"\bbase64\b[^\n|]{0,40}(?:-d|--decode|-D)\b[^\n|]{0,60}\|\s*(?:ba)?sh\b", re.I),
+     "obfuscation: base64-decode-pipe-to-shell", "high"),
+    (re.compile(r"\b(?:decode|de-?obfuscate|unescape)\b[^.\n]{0,30}(?:and\s+)?(?:run|execute|eval|exec)\b", re.I),
+     "obfuscation: 'decode and run'", "high"),
+    (re.compile(r"data:(?:text|application)/[^;\n]{0,40};base64,", re.I),
+     "obfuscation: base64 data: URI", "warn"),
+    (re.compile(r"[A-Za-z0-9+/]{160,}={0,2}"),
+     "obfuscation: long base64-like blob", "warn"),
+    (re.compile(r"\\x[0-9a-fA-F]{2}(?:\\x[0-9a-fA-F]{2}){10,}"),
+     "obfuscation: long hex-escaped byte string", "warn"),
+
+    # --- markdown / link injection -------------------------------------
     (re.compile(r"<!--.*?-->", re.S),
-     "hidden markdown comment (common injection carrier)"),
+     "hidden markdown comment (common injection carrier)", "warn"),
+    (re.compile(r"\]\(\s*javascript:", re.I),
+     "link injection: javascript: URL", "high"),
+    (re.compile(r"!\[[^\]]*\]\(\s*https?://[^)]*[?&](?:data|token|secret|prompt|q)=", re.I),
+     "link injection: image URL with data-exfil query", "high"),
+
+    # --- authority / social engineering --------------------------------
+    (re.compile(r"\bthe\s+(?:user|operator|admin(?:istrator)?|owner)\s+(?:has\s+)?(?:authorized|approved|permitted|allowed|requested)\b", re.I),
+     "social-engineering: false authorization claim", "warn"),
+    (re.compile(r"\byou\s+(?:have|now\s+have|are\s+granted)\s+(?:full\s+)?permission\s+to\b", re.I),
+     "social-engineering: false permission grant", "warn"),
 ]
 
 
@@ -107,10 +205,22 @@ class Finding:
     category: str  # "ansi" | "control" | "hidden-unicode" | "tag-chars" | "phrase"
     detail: str
     count: int = 1
+    severity: str = "warn"  # "warn" | "high"
 
     def render(self) -> str:
         suffix = f" (x{self.count})" if self.count > 1 else ""
-        return f"[{self.category}] {self.detail}{suffix}"
+        mark = "‼ " if self.severity == "high" else ""
+        return f"{mark}[{self.category}] {self.detail}{suffix}"
+
+
+SEVERITY_RANK = {"warn": 1, "high": 2}
+
+
+def max_severity(findings: list[Finding]) -> str | None:
+    """Highest severity among ``findings`` (``None`` when empty)."""
+    if not findings:
+        return None
+    return max(findings, key=lambda f: SEVERITY_RANK.get(f.severity, 0)).severity
 
 
 def scan(text: str) -> list[Finding]:
@@ -119,25 +229,25 @@ def scan(text: str) -> list[Finding]:
 
     n_ansi = len(_ANSI_RE.findall(text))
     if n_ansi:
-        findings.append(Finding("ansi", "ANSI/VT terminal escape sequence", n_ansi))
+        findings.append(Finding("ansi", "ANSI/VT terminal escape sequence", n_ansi, "warn"))
 
     # Count control chars that are not part of an ANSI escape we already counted.
     n_ctrl = len(_CONTROL_RE.findall(_ANSI_RE.sub("", text)))
     if n_ctrl:
-        findings.append(Finding("control", "non-printable control character", n_ctrl))
+        findings.append(Finding("control", "non-printable control character", n_ctrl, "warn"))
 
     n_hidden = len(_HIDDEN_RE.findall(text))
     if n_hidden:
-        findings.append(Finding("hidden-unicode", "invisible/bidi Unicode code point", n_hidden))
+        findings.append(Finding("hidden-unicode", "invisible/bidi Unicode code point", n_hidden, "high"))
 
     n_tag = len(_TAG_RE.findall(text))
     if n_tag:
-        findings.append(Finding("tag-chars", "Unicode tag char (ASCII smuggling)", n_tag))
+        findings.append(Finding("tag-chars", "Unicode tag char (ASCII smuggling)", n_tag, "high"))
 
-    for pattern, label in _INJECTION_PHRASES:
+    for pattern, label, severity in _INJECTION_PATTERNS:
         hits = len(pattern.findall(text))
         if hits:
-            findings.append(Finding("phrase", label, hits))
+            findings.append(Finding("phrase", label, hits, severity))
 
     return findings
 
