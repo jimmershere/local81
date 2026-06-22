@@ -1,0 +1,88 @@
+name: Deploy portwright.io
+
+# Connector: publish the editorial site to portwright.io when changes land on
+# main (i.e. on a successful merge to origin). The actual transport uses
+# repository SECRETS — no credentials live in this file or the repo. A
+# `production` environment provides the post-review approval gate: configure it
+# with required reviewers in Settings -> Environments so a merge pauses for a
+# human "publish" approval before it ships. See deploy/portwright/README.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/portwright/**'
+      - '.github/workflows/deploy-portwright.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-portwright
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish site/portwright to the droplet
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check deploy secrets are configured
+        id: guard
+        env:
+          HOST: ${{ secrets.PORTWRIGHT_HOST }}
+          KEY: ${{ secrets.PORTWRIGHT_SSH_KEY }}
+        run: |
+          if [ -n "$HOST" ] && [ -n "$KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::PORTWRIGHT_HOST / PORTWRIGHT_SSH_KEY not set; skipping publish. Add them under Settings -> Environments -> production."
+          fi
+
+      - name: Configure SSH
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          KEY: ${{ secrets.PORTWRIGHT_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PORTWRIGHT_KNOWN_HOSTS }}
+          HOST: ${{ secrets.PORTWRIGHT_HOST }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Publish via rsync over SSH
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          HOST: ${{ secrets.PORTWRIGHT_HOST }}
+          DEPLOY_USER: ${{ secrets.PORTWRIGHT_USER }}
+          REMOTE_PATH: ${{ secrets.PORTWRIGHT_PATH }}
+        run: |
+          DEPLOY_USER="${DEPLOY_USER:-root}"
+          REMOTE_PATH="${REMOTE_PATH:-/var/www/portwright.io}"
+          # No --delete: we publish the editorial page + assets without clobbering
+          # the rest of the site. README/deploy notes are excluded.
+          rsync -avz \
+            --exclude 'README.md' \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            site/portwright/ "${DEPLOY_USER}@${HOST}:${REMOTE_PATH}/"
+          echo "Published site/portwright/ to ${HOST}:${REMOTE_PATH}"
+
+      - name: Summarize
+        if: always()
+        run: |
+          if [ "${{ steps.guard.outputs.ready }}" = "true" ]; then
+            echo "Deploy ran. Page: https://portwright.io/ai-it-alerts.html"
+          else
+            echo "Deploy skipped: configure production environment secrets to enable publishing."
+          fi

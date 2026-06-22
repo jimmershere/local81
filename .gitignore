@@ -27,3 +27,7 @@ packaging/rpm/.rpmbuild/
 # local working artifacts (not product code)
 .claude/
 docs/demo/
+
+# credential files — never commit
+github.env
+*.credentials

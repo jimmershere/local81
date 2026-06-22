@@ -99,6 +99,32 @@
     color: var(--muted);
     font-size: 18px;
   }
+  .hero-grid {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .hero-copy { flex: 1 1 360px; min-width: 0; }
+  .hero-mascot {
+    flex: 0 0 auto;
+    margin: 0;
+    text-align: center;
+  }
+  .hero-mascot img {
+    width: clamp(160px, 28vw, 280px);
+    height: auto;
+    filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+  }
+  .hero-mascot figcaption {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  @media (max-width: 640px) {
+    .hero-grid { flex-direction: column-reverse; align-items: flex-start; }
+    .hero-mascot { align-self: center; }
+  }
   .pagemeta {
     margin-top: 22px;
     font-size: 14px;
@@ -257,19 +283,27 @@
 </header>
 
 <section class="hero" aria-labelledby="hero-title">
-  <div class="wrap">
-    <p class="eyebrow">AI / IT Security Alerts</p>
-    <h1 id="hero-title">Threats to AI coding agents, and how to shut them down</h1>
-    <p class="lede">
-      Editorial briefings on emerging risks where AI and IT operations meet — written
-      for operators and developers who need to act, not just read. This edition covers
-      <strong>Agentjacking</strong>: prompt-injection smuggled through logs and error reports
-      to hijack AI coding agents.
-    </p>
-    <p class="pagemeta">
-      <span class="badge">Editorial &middot; Educational</span>
-      &nbsp; Published <time datetime="2026-06-22">2026-06-22</time>
-    </p>
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">AI / IT Security Alerts</p>
+      <h1 id="hero-title">Threats to AI coding agents, and how to shut them down</h1>
+      <p class="lede">
+        Editorial briefings on emerging risks where AI and IT operations meet — written
+        for operators and developers who need to act, not just read. This edition covers
+        <strong>Agentjacking</strong>: prompt-injection smuggled through logs and error reports
+        to hijack AI coding agents.
+      </p>
+      <p class="pagemeta">
+        <span class="badge">Editorial &middot; Educational</span>
+        &nbsp; Published <time datetime="2026-06-22">2026-06-22</time>
+      </p>
+    </div>
+    <figure class="hero-mascot">
+      <img src="assets/portwr-clem.png" width="320" height="320"
+           alt="Clem, the Portwright mascot — a dockworker keeping watch over the logs."
+           loading="eager" decoding="async">
+      <figcaption>Clem stands watch over your logs.</figcaption>
+    </figure>
   </div>
 </section>
 
