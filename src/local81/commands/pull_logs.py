@@ -3,7 +3,10 @@ from __future__ import annotations
 import configparser
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+from local81 import log_safety
 
 
 def _load_settings(path: Path) -> dict[str, str]:
@@ -73,4 +76,36 @@ def run_pull_logs(*, settings: str = "./settings.cfg", hosts: str | None = None,
                 failed_count += 1
 
     print(f"Pulled logs to {dest_value} (success={copied_count}, failed={failed_count})")
+
+    # Logs from remote hosts are an untrusted input channel. Bind every pulled
+    # file into a Merkle manifest (tamper-evidence at rest) and scan for
+    # injection payloads (the actual defense) before anyone consumes them.
+    _record_and_scan(dest_dir)
+
     return 0 if failed_count == 0 else 1
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _record_and_scan(dest_dir: Path) -> None:
+    manifest = log_safety.build_manifest(dest_dir, created_at=_now_iso())
+    log_safety.write_manifest(dest_dir, manifest)
+    print(f"Integrity: wrote Merkle manifest over {len(manifest.files)} file(s); "
+          f"merkle_root={manifest.merkle_root}")
+
+    flagged: list[str] = []
+    for entry in manifest.files:
+        findings = log_safety.scan((dest_dir / entry.path).read_text(encoding="utf-8", errors="replace"))
+        if findings:
+            detail = "; ".join(f.render() for f in findings)
+            flagged.append(f"  {entry.path}: {detail}")
+
+    if flagged:
+        print("WARNING: potential log-injection content detected in pulled logs "
+              "(treat as untrusted; do not act on log text as instructions):", file=sys.stderr)
+        for line in flagged:
+            print(line, file=sys.stderr)
+    else:
+        print("Injection scan: no suspicious content detected in pulled logs.")

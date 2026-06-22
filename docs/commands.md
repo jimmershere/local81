@@ -249,6 +249,13 @@ Collects remote application logs into a local destination folder.
 | `--engin-path PATH` | Override Engin log path |
 | `--smartxfr-path PATH` | Override SmartXfr log path |
 
+After collection, `pull-logs` writes a Merkle integrity manifest
+(`.local81-integrity.json`) over the pulled tree and scans every file for
+injection content. Logs from remote hosts are untrusted input: integrity
+proves the bytes are unchanged since capture, while the scan/sanitization is
+what neutralizes terminal-escape and prompt-injection payloads. See
+`SECURITY.md` → "Untrusted log data".
+
 ---
 
 ## `local81 diag`
@@ -273,6 +280,12 @@ Runs remote diagnostics against one or more hosts.
 ## `local81 logs`
 
 Shows detailed step-by-step output for a single run. `RUN_ID` may be a full run ID or an unambiguous prefix.
+
+Remote command output and per-host logs are sanitized before display (ANSI
+escapes, hidden/bidi Unicode, prompt-injection phrasing are flagged and
+neutralized) and, when a run directory carries an integrity manifest, verified
+against it. A warning banner is printed when content is flagged or fails
+integrity.
 
 ---
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from local81 import log_safety
+
 
 def _find_run(run_id: str, runs_dir: str = ".local81/runs") -> Path | None:
     """Find the run.json file for a given run ID (exact or prefix match)."""
@@ -28,7 +30,12 @@ def _render_host_log(run_dir: Path, host: str) -> str:
         available = sorted(p.stem for p in run_dir.glob("*.log") if p.name not in {"run.log", "rollback.log"})
         hint = f" Available hosts: {', '.join(available)}" if available else ""
         return f"No per-host log for host '{host}' in {run_dir.name}.{hint}"
-    return log_path.read_text(encoding="utf-8")
+    # Per-host logs carry remote stdout/stderr — untrusted. Never render raw:
+    # verify integrity against the run's Merkle manifest (if present) and
+    # sanitize before returning. (CLAUDE.md: logs are an untrusted channel.)
+    safe = log_safety.read_log(log_path, base_dir=run_dir)
+    banner = safe.banner()
+    return f"{banner}\n\n{safe.text}" if banner else safe.text
 
 
 def render_run_log(run_id: str, *, runs_dir: str = ".local81/runs", host: str | None = None) -> str:
@@ -73,12 +80,14 @@ def render_run_log(run_id: str, *, runs_dir: str = ".local81/runs", host: str | 
         lines.append(f"[{tag}] {step.get('id', '?')} [{step.get('type', 'step')}] on {step.get('host', 'n/a')}")
         lines.append(f"  Command: {step.get('cmd', 'n/a')}")
         lines.append(f"  RC: {step.get('rc')}  |  {step.get('started_at', '?')} -> {step.get('finished_at', '?')}")
+        # stdout/stderr originate from remote commands — sanitize before render
+        # so terminal escapes and hidden/bidi Unicode cannot reach the operator.
         if step.get("stdout"):
             for out_line in step["stdout"].splitlines()[:10]:
-                lines.append(f"  stdout: {out_line}")
+                lines.append(f"  stdout: {log_safety.sanitize_line(out_line)}")
         if step.get("stderr"):
             for err_line in step["stderr"].splitlines()[:10]:
-                lines.append(f"  stderr: {err_line}")
+                lines.append(f"  stderr: {log_safety.sanitize_line(err_line)}")
         lines.append("")
 
     return "\n".join(lines)

@@ -33,3 +33,22 @@ hosts over SSH. Reports that are especially in scope:
 - Command/argument injection in plan compilation or deploy execution.
 - Access-policy or actor-check bypass in `deploy` / `compliance`.
 - Privilege or path-traversal issues in rsync/ssh handling.
+
+## Untrusted log data
+
+Logs collected from remote hosts (`pull-logs`, `diag`) and remote command
+output rendered by `logs` are treated as an **untrusted input channel** — they
+may be read by operators in a terminal or by AI agents during triage, so a
+payload embedded in a log must never be interpreted as an instruction
+("Agentjacking"). Two independent controls in `local81.log_safety` run before
+any log is consumed:
+
+- **Merkle integrity.** Each capture writes `.local81-integrity.json`, a
+  SHA-256-per-file manifest bound under a single RFC-6962 Merkle root (shared
+  with the audit `ledger`). Consumption verifies content against it and reports
+  any file altered, added, or removed after capture.
+- **Injection scanning + sanitization.** Integrity proves bytes are
+  *unchanged*, not *safe*. The scanner flags and the sanitizer neutralizes
+  ANSI/terminal escape sequences, invisible/bidi Unicode and Unicode tag-char
+  smuggling, and heuristic prompt-injection phrasing, leaving rendered text
+  inert. This — not the Merkle check — is what stops an injected payload.
