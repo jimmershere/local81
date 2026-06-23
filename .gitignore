@@ -31,3 +31,4 @@ docs/demo/
 # credential files — never commit
 github.env
 *.credentials
+.work/
