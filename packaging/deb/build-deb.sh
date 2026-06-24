@@ -75,7 +75,7 @@ Version: ${VERSION}-${RELEASE}
 Section: admin
 Priority: optional
 Architecture: all
-Maintainer: Jimmer Kelley <jimmershere@gmail.com>
+Maintainer: Local-81 Maintainers <clem@portwright.io>
 Homepage: https://github.com/jimmershere/local81
 Vcs-Browser: https://github.com/jimmershere/local81
 Vcs-Git: https://github.com/jimmershere/local81.git
