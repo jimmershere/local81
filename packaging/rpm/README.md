@@ -73,6 +73,14 @@ You can override the runtime or image:
 CONTAINER_RUNTIME=podman LOCAL81_RPM_CONTAINER_IMAGE=rockylinux:9 ./packaging/rpm/build-rpm-container.sh
 ```
 
+## Air-gapped / pip-free alternative
+
+This RPM embeds an application virtualenv populated by `pip` during the build,
+so the build host needs pip and (typically) network access to PyPI. For
+locked-down or air-gapped networks where pip is unavailable, ship the
+self-contained zipapp instead — see [`../zipapp/README.md`](../zipapp/README.md)
+(`make zipapp`); it vendors PyYAML and needs only `python3.12`.
+
 ## Validation
 
 From the repo root:
