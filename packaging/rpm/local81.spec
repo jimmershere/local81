@@ -80,13 +80,13 @@ LOCAL81_HOME=%{buildroot}%{app_root} %{buildroot}%{_bindir}/local81 help >/dev/n
 %dir %{_sharedstatedir}/local81
 
 %changelog
-* Wed Jun 24 2026 Jimmer Kelley <jimmershere@gmail.com> - 0.1.0-3
+* Wed Jun 24 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-3
 - Correct license metadata to MIT and set canonical project URL
-- Refresh maintainer/changelog metadata
+- Use neutral org maintainer alias (clem@portwright.io)
 - Runtime dependency surface is now PyYAML only (Textual TUI is an optional
   pip extra); an air-gapped, pip-free zipapp build is also available via
   `make zipapp` (see packaging/zipapp)
-* Mon Jun 01 2026 Jimmer Kelley <jimmershere@gmail.com> - 0.1.0-2
+* Mon Jun 01 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-2
 - Align RPM application bundle with Debian packaging layout and add smoke checks
-* Tue Apr 21 2026 Jimmer Kelley <jimmershere@gmail.com> - 0.1.0-1
+* Tue Apr 21 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-1
 - Initial RPM packaging scaffold
