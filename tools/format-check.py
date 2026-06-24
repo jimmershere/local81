@@ -7,6 +7,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Vendored third-party source (see vendor/README.md) is kept byte-faithful to
+# upstream and is not subject to Local-81 formatting rules.
+EXCLUDED_PREFIXES = ("vendor/",)
+
 TEXT_SUFFIXES = {
     ".cfg",
     ".ini",
@@ -37,6 +41,8 @@ def _git_candidate_files() -> list[str]:
 def main() -> int:
     findings: list[str] = []
     for rel in _git_candidate_files():
+        if rel.startswith(EXCLUDED_PREFIXES):
+            continue
         path = ROOT / rel
         if not path.is_file() or path.suffix not in TEXT_SUFFIXES:
             continue

@@ -19,9 +19,11 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: System :: Systems Administration",
 ]
+# Stdlib-first: PyYAML is the ONLY third-party runtime dependency. For
+# air-gapped / pip-less builds it is vendored under vendor/yaml and bundled into
+# a single zipapp by `make zipapp` (see packaging/zipapp/README.md).
 dependencies = [
   "PyYAML>=6.0",
-  "textual>=8.2.5",
 ]
 
 [project.scripts]
