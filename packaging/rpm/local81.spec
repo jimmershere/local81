@@ -1,10 +1,10 @@
 Name:           local81
 Version:        0.1.0
-Release:        2%{?dist}
-Summary:        Local-81 deployment control plane
+Release:        3%{?dist}
+Summary:        Local-81 operator-readable deploy and runbook control plane
 
-License:        Proprietary
-URL:            https://example.invalid/local81
+License:        MIT
+URL:            https://github.com/jimmershere/local81
 
 # Current codebase requires Python 3.12+. On RHEL8 this usually means a custom
 # builder/runtime or an internal python3.12 package stream.
@@ -80,7 +80,13 @@ LOCAL81_HOME=%{buildroot}%{app_root} %{buildroot}%{_bindir}/local81 help >/dev/n
 %dir %{_sharedstatedir}/local81
 
 %changelog
-* Mon Jun 01 2026 Local-81 Operators <local81@example.invalid> - 0.1.0-2
+* Wed Jun 24 2026 Jimmer Kelley <jimmershere@gmail.com> - 0.1.0-3
+- Correct license metadata to MIT and set canonical project URL
+- Refresh maintainer/changelog metadata
+- Runtime dependency surface is now PyYAML only (Textual TUI is an optional
+  pip extra); an air-gapped, pip-free zipapp build is also available via
+  `make zipapp` (see packaging/zipapp)
+* Mon Jun 01 2026 Jimmer Kelley <jimmershere@gmail.com> - 0.1.0-2
 - Align RPM application bundle with Debian packaging layout and add smoke checks
-* Tue Apr 21 2026 OpenClaw <openclaw@example.invalid> - 0.1.0-1
+* Tue Apr 21 2026 Jimmer Kelley <jimmershere@gmail.com> - 0.1.0-1
 - Initial RPM packaging scaffold

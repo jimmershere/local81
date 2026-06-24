@@ -26,5 +26,12 @@ packaging/deb/.debbuild/artifacts/
 ## Smoke test
 The smoke test extracts the package into a temporary directory and runs the packaged wrapper with `LOCAL81_HOME` pointed at the extracted payload, so it does not install into the host system:
 ```bash
-./packaging/deb/test-deb.sh packaging/deb/.debbuild/artifacts/local81_0.1.0-1_all.deb
+./packaging/deb/test-deb.sh packaging/deb/.debbuild/artifacts/local81_0.1.0-2_all.deb
 ```
+
+## Air-gapped / pip-free alternative
+
+This `.deb` builds an application virtualenv and therefore needs `pip` (and
+network) at build time. For locked-down or air-gapped networks where pip is
+unavailable, use the self-contained zipapp instead — see
+[`../zipapp/README.md`](../zipapp/README.md) (`make zipapp`).
