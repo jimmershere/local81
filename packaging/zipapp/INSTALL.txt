@@ -1,0 +1,55 @@
+Local-81 -- offline install (RHEL 8.10 / kernel 4.18.0-553 x86_64, air-gapped)
+=============================================================================
+
+This bundle is a single self-contained Python zipapp. It contains NO compiled
+binaries and needs NO pip, NO internet, and NO third-party packages at runtime.
+The only requirement on the target host is the python3.12 interpreter.
+
+Contents
+--------
+  local81.pyz    Self-contained executable (Local-81 + vendored PyYAML, pure source)
+  local81        Convenience launcher (bash -> python3.12 local81.pyz "$@")
+  INSTALL.txt    This file
+  MANIFEST.txt   Greppable inventory of every module inside local81.pyz
+  SHA256SUMS     Integrity checksums
+
+1. Verify integrity (recommended before install)
+-------------------------------------------------
+   sha256sum -c SHA256SUMS
+
+2. Ensure python3.12 is present
+-------------------------------
+   python3.12 --version
+   # If missing, from your offline RHEL repo / satellite:
+   sudo dnf install python3.12
+
+3. Run in place (no install)
+----------------------------
+   python3.12 local81.pyz --help
+   ./local81 --help            # same thing, via the launcher
+
+4. Install for all operators (optional)
+---------------------------------------
+   sudo install -m 0755 local81.pyz /usr/local/lib/local81.pyz
+   sudo tee /usr/local/bin/local81 >/dev/null <<'EOF'
+   #!/usr/bin/env bash
+   exec python3.12 /usr/local/lib/local81.pyz "$@"
+   EOF
+   sudo chmod 0755 /usr/local/bin/local81
+   local81 --help
+
+Auditing the artifact
+---------------------
+   unzip -l local81.pyz             # list every bundled module
+   unzip -p local81.pyz local81/cli.py | less    # read any source file
+   python3.12 -m zipfile -l local81.pyz
+
+Notes for secure environments
+-----------------------------
+  * Architecture/kernel independent: pure Python source, nothing linked against
+    glibc. The same .pyz validated on RHEL 8.10 runs on any python3.12 host.
+  * PyYAML runs in pure-Python mode (no libyaml .so); Local-81 uses only
+    safe_load / safe_dump.
+  * Local-81 writes owner-only artifacts (0700 dirs / 0600 files) under .local81/.
+  * Mutating actions are dry-run/planned unless --execute is supplied.
+  * Secrets are never literals -- pass env-var names or external references.

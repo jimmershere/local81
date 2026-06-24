@@ -19,15 +19,25 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: System :: Systems Administration",
 ]
+# Stdlib-first: PyYAML is the ONLY required third-party runtime dependency. For
+# air-gapped / pip-less builds it is vendored under vendor/yaml and bundled into
+# a single zipapp by `make zipapp` (see packaging/zipapp/README.md). Optional
+# extras (e.g. the Textual TUI) live under [project.optional-dependencies] so the
+# core offline install stays dependency-light.
 dependencies = [
   "PyYAML>=6.0",
-  "textual>=8.2.5",
 ]
 
 [project.scripts]
 local81 = "local81.cli:main"
 
 [project.optional-dependencies]
+# Optional Textual TUI front-end. Not required by the core CLI and not bundled
+# into the air-gapped zipapp; install with `pip install local81[tui]` where
+# network/pip is available.
+tui = [
+  "textual>=8.2.5",
+]
 dev = [
   "pytest>=8",
   "ruff>=0.8",

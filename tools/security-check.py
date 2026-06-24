@@ -20,6 +20,10 @@ GENERATED_PATTERNS = (
     "packaging/rpm/*.rpm",
 )
 
+# Vendored third-party source (see vendor/README.md) is trusted upstream code,
+# kept byte-faithful; it is not subject to Local-81's source-style scans.
+EXCLUDED_PREFIXES = ("vendor/",)
+
 TEXT_SUFFIXES = {
     ".cfg",
     ".ini",
@@ -156,10 +160,13 @@ def _python_security_findings(paths: list[str]) -> list[str]:
 
 def main() -> int:
     tracked_paths = _git_ls_files()
+    # Generated-artifact detection still runs over everything; source-style scans
+    # skip vendored third-party trees.
+    scan_paths = [p for p in tracked_paths if not p.startswith(EXCLUDED_PREFIXES)]
     findings = [
         *_tracked_generated_findings(tracked_paths),
-        *_secret_findings(tracked_paths),
-        *_python_security_findings(tracked_paths),
+        *_secret_findings(scan_paths),
+        *_python_security_findings(scan_paths),
     ]
     if findings:
         print("Local-81 security check failed:")
