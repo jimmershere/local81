@@ -1,0 +1,9 @@
+# Endpoints to onboard — space-separated. Blank lines and #comments are ignored.
+# Columns:  hostname  ip            group       purpose/tag
+web01       10.0.0.11   web-tier    nginx-frontend
+cdn01       10.0.0.12   web-tier    static-cdn
+papi01      10.0.0.21   api-tier    python-api
+napi01      10.0.0.22   api-tier    node-api
+pgdb01      10.0.0.31   data-tier   postgres-17
+cache01     10.0.0.32   data-tier   redis-cache
+worker01    10.0.0.41   workers     queue-worker
