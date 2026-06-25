@@ -1,10 +1,10 @@
 Name:           local81
 Version:        0.1.0
-Release:        2%{?dist}
-Summary:        Local-81 deployment control plane
+Release:        3%{?dist}
+Summary:        Local-81 operator-readable deploy and runbook control plane
 
-License:        Proprietary
-URL:            https://example.invalid/local81
+License:        MIT
+URL:            https://github.com/jimmershere/local81
 
 # Current codebase requires Python 3.12+. On RHEL8 this usually means a custom
 # builder/runtime or an internal python3.12 package stream.
@@ -80,6 +80,9 @@ LOCAL81_HOME=%{buildroot}%{app_root} %{buildroot}%{_bindir}/local81 help >/dev/n
 %dir %{_sharedstatedir}/local81
 
 %changelog
+* Wed Jun 24 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-3
+- Correct license metadata to MIT and set canonical project URL
+- Use neutral org maintainer alias (clem@portwright.io)
 * Mon Jun 01 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-2
 - Align RPM application bundle with Debian packaging layout and add smoke checks
 * Tue Apr 21 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-1

@@ -33,7 +33,7 @@ if not match:
 print(match.group(1))
 PY
 )"
-RELEASE="${LOCAL81_PACKAGE_RELEASE:-1}"
+RELEASE="${LOCAL81_PACKAGE_RELEASE:-2}"
 PACKAGE_FILE="local81_${VERSION}-${RELEASE}_all.deb"
 
 rm -rf "${BUILD_DIR}"
@@ -76,9 +76,12 @@ Section: admin
 Priority: optional
 Architecture: all
 Maintainer: Local-81 Maintainers <clem@portwright.io>
+Homepage: https://github.com/jimmershere/local81
+Vcs-Browser: https://github.com/jimmershere/local81
+Vcs-Git: https://github.com/jimmershere/local81.git
 Installed-Size: ${INSTALLED_SIZE}
 Depends: bash, python3.12, python3.12-venv, openssh-client, rsync, findutils
-Description: Local-81 deployment control plane
+Description: Local-81 operator-readable deploy and runbook control plane
  Local-81 is a Python-based deployment and operator control plane for
  generating plans, validating deploys, and running controlled workflow
  operations.
