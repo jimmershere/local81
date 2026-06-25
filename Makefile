@@ -1,4 +1,4 @@
-.PHONY: test compile shell-test full-shell-test python-test lint format-check security-check quality ci package-deb package-rpm package-rpm-container test-rpm-package clean-generated
+.PHONY: test compile shell-test full-shell-test python-test lint format-check security-check quality ci package-deb package-rpm package-rpm-container test-rpm-package zipapp clean-generated
 
 PYTHON ?= $(shell if [ -x .venv/bin/python ]; then printf '%s' .venv/bin/python; else printf '%s' python3; fi)
 BASELINE_SHELL_TESTS := \
@@ -63,6 +63,11 @@ package-rpm:
 
 package-rpm-container:
 	./packaging/rpm/build-rpm-container.sh
+
+# Air-gapped / pip-free build: single self-contained zipapp + offline .zip bundle.
+# Needs only python3.12 + stdlib (no pip, no network, no compiler).
+zipapp:
+	./packaging/zipapp/build-zipapp.sh
 
 test-rpm-package:
 	./packaging/rpm/test-rpm.sh
