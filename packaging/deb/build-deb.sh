@@ -75,7 +75,7 @@ Version: ${VERSION}-${RELEASE}
 Section: admin
 Priority: optional
 Architecture: all
-Maintainer: Local-81 Operators <local81@example.invalid>
+Maintainer: Local-81 Maintainers <clem@portwright.io>
 Installed-Size: ${INSTALLED_SIZE}
 Depends: bash, python3.12, python3.12-venv, openssh-client, rsync, findutils
 Description: Local-81 deployment control plane

@@ -80,7 +80,7 @@ LOCAL81_HOME=%{buildroot}%{app_root} %{buildroot}%{_bindir}/local81 help >/dev/n
 %dir %{_sharedstatedir}/local81
 
 %changelog
-* Mon Jun 01 2026 Local-81 Operators <local81@example.invalid> - 0.1.0-2
+* Mon Jun 01 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-2
 - Align RPM application bundle with Debian packaging layout and add smoke checks
-* Tue Apr 21 2026 OpenClaw <openclaw@example.invalid> - 0.1.0-1
+* Tue Apr 21 2026 Local-81 Maintainers <clem@portwright.io> - 0.1.0-1
 - Initial RPM packaging scaffold
