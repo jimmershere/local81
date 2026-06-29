@@ -43,7 +43,7 @@ _FORBIDDEN = (
         ("A70LSPALM2IN001", ROLE_POSTGRES),  # case-insensitive
         ("a70lspalm2or001", ROLE_ORACLE),
         ("a70lspalm2tr001", ROLE_MQ),
-        ("a70lspalm2ap001", ROLE_APP),
+        ("a70lspalm2ex001", ROLE_APP),
         ("host-m2-web-9", ROLE_APP),
     ],
 )
@@ -111,7 +111,7 @@ def test_unknown_role_rejected() -> None:
 # --- the plan is genuinely read-only ---------------------------------------
 
 def test_discovery_plan_is_read_only() -> None:
-    for host in ("a70lspalm2in001", "a70lspalm2or001", "a70lspalm2tr001", "a70lspalm2ap001"):
+    for host in ("a70lspalm2in001", "a70lspalm2or001", "a70lspalm2tr001", "a70lspalm2ex001"):
         steps = discovery_plan(host)
         assert steps
         for step in steps:
@@ -146,7 +146,7 @@ def test_discovery_script_runs_clean_under_set_u(tmp_path: Path) -> None:
     bash = shutil.which("bash")
     if bash is None:  # pragma: no cover - CI always has bash
         pytest.skip("bash not available")
-    for host in ("a70lspalm2in001", "a70lspalm2or001", "a70lspalm2tr001", "a70lspalm2ap001"):
+    for host in ("a70lspalm2in001", "a70lspalm2or001", "a70lspalm2tr001", "a70lspalm2ex001"):
         script = tmp_path / f"{host}.sh"
         script.write_text(render_discovery_script(host), encoding="utf-8")
         proc = subprocess.run([bash, str(script)], capture_output=True, text=True, timeout=30)
@@ -158,7 +158,7 @@ def test_discovery_script_runs_clean_under_set_u(tmp_path: Path) -> None:
 # --- catalog rendering round-trips through the validator -------------------
 
 def test_rendered_catalog_round_trips() -> None:
-    hosts = ["a70lspalm2ap001", "a70lspalm2in001", "a70lspalm2or001", "a70lspalm2tr001"]
+    hosts = ["a70lspalm2ex001", "a70lspalm2in001", "a70lspalm2or001", "a70lspalm2tr001"]
     text = render_m2_catalog(hosts)
     # Write + load through the real validator.
     import tempfile
@@ -233,7 +233,7 @@ def test_cli_plan_writes_outputs(tmp_path: Path) -> None:
     from local81.commands.m2 import run_m2_plan
 
     hosts_file = tmp_path / "hosts.txt"
-    hosts_file.write_text("a70lspalm2in001\na70lspalm2or001\na70lspalm2tr001\na70lspalm2ap001\n", encoding="utf-8")
+    hosts_file.write_text("a70lspalm2in001\na70lspalm2or001\na70lspalm2tr001\na70lspalm2ex001\n", encoding="utf-8")
     out = tmp_path / "m2-out"
     rc = run_m2_plan(hosts=None, hosts_file=str(hosts_file), out=str(out), output_format="text")
     assert rc == 0

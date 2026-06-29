@@ -26,7 +26,7 @@ wrong box.
 One host per line (`#` comments and blanks ignored) — see [`hosts.example.txt`](hosts.example.txt):
 
 ```
-a70lspalm2ap001
+a70lspalm2ex001
 a70lspalm2in001
 a70lspalm2or001
 a70lspalm2tr001
@@ -36,7 +36,7 @@ a70lspalm2tr001
 
 ```bash
 local81 m2 classify --hosts-file hosts.example.txt
-# a70lspalm2ap001 -> m2-app
+# a70lspalm2ex001 -> m2-app
 # a70lspalm2in001 -> m2-postgres
 # a70lspalm2or001 -> m2-oracle
 # a70lspalm2tr001 -> m2-mq
@@ -74,7 +74,7 @@ Every line only observes — it stats paths, queries `systemctl`/`dpkg`/`rpm`, a
 ```bash
 local81 doctor --fleet                                  # reachable + carries the 5 POSIX tools
 local81 ui semaphore-render --catalog m2-out/fleet-m2.yaml --db-host <pg>
-local81 pull-logs --hosts a70lspalm2ap001 \
+local81 pull-logs --hosts a70lspalm2ex001 \
   --jboss-path '$JBOSS_HOME/standalone/log' \
   --engin-path /app/engin/palmed/logs \
   --smartxfr-path /app/smartxfr/logs        # pull-logs already understands this stack
