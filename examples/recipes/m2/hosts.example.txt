@@ -1,0 +1,14 @@
+# M2 fleet hosts — one per line (used with: local81 m2 plan --hosts-file ...).
+# Classified by name marker:
+#   ...m2in...  -> PostgreSQL 17 DB host   (m2-postgres)
+#   ...m2or...  -> Oracle DB host          (m2-oracle)
+#   ...m2tr...  -> IBM MQ queue manager    (m2-mq)
+#   ...m2...    -> JBoss/Java app host     (m2-app)
+# Blank lines and '#' comments are ignored.
+a70lspalm2ap001
+a70lspalm2ap002
+a70lspalm2in001
+a70lspalm2in002
+a70lspalm2or001
+a70lspalm2tr001
+a70lspalm2tr002

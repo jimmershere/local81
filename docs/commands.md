@@ -320,6 +320,43 @@ server, and the `log-guard` Claude Code skill that wrap this engine, and
 
 ---
 
+## `local81 m2`
+
+Classify M2 stack hosts by name and render their **read-only** stack-discovery
+plan. The M2 fleet is a JBoss/Java + Oracle/PostgreSQL + IBM MQ stack whose hosts
+follow a naming convention Local-81 keys off of:
+
+| Name contains | Role | Probed stack |
+|---|---|---|
+| `m2in` | `m2-postgres` | PostgreSQL 17 package/service/data/config |
+| `m2or` | `m2-oracle` | `/etc/oratab`, `ORACLE_HOME`, listener/tnsnames, `ora_pmon` |
+| `m2tr` | `m2-mq` | IBM MQ `/opt/mqm` + `/var/mqm`, `dspmq`, `qm.ini`, `*.mqsc` |
+| `m2` (other) | `m2-app` | `/var/www/html/vhosts`, `$JBOSS_HOME/standalone/`, `/props`, `engin/palmed`, `smartxfr` |
+
+Every role also probes the shared base: the Java client root `/app` and the
+Oracle client root `/opt`. A name with no `m2` marker fails closed.
+
+| Subcommand / flag | Description |
+|---|---|
+| `m2 classify` | Print the role each host name maps to |
+| `m2 plan` | Render the read-only discovery checks per host |
+| `--hosts CSV` / `--hosts-file PATH` | Hosts to classify |
+| `--out DIR` | (plan) Write `fleet-m2.yaml`, per-host `discover/<host>.sh`, and `discovery-plan.tsv` |
+| `--format {text,json}` | `json` emits the exact probe argv for CI / n8n / MCP |
+| `--fleet-name NAME` / `--base-port N` | (plan) Catalog name and first placeholder port |
+
+Nothing here contacts a host or changes state — it only classifies names and
+renders the commands an operator (or `doctor` / `pull-logs` / `deploy`) runs next.
+See `examples/recipes/m2/` for a worked recipe and a checked-in `fleet-m2.yaml`.
+
+```bash
+local81 m2 classify --hosts a70lspalm2in001,a70lspalm2or001,a70lspalm2tr001
+local81 m2 plan --hosts-file examples/recipes/m2/hosts.example.txt --out m2-out
+ssh a70lspalm2in001 'bash -s' < m2-out/discover/a70lspalm2in001.sh   # read-only report
+```
+
+---
+
 ## `local81 diff`
 
 Compares two generated plan files.

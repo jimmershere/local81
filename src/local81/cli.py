@@ -19,6 +19,7 @@ from .commands.keys import run_keys
 from .commands.logs import run_logs
 from .commands.scan import run_scan
 from .commands.onboard import run_onboard
+from .commands.m2 import run_m2
 from .commands.plan import run_plan
 from .commands.profiles import run_profile_create, run_profiles
 from .commands.pull import run_pull
@@ -35,6 +36,7 @@ def print_command_reference() -> None:
   local81 doctor [--plan PATH] [--fleet]
   local81 keys <ensure|check|copy> [--path PATH] [--hosts CSV] [--hosts-file PATH] [--execute]
   local81 onboard --hosts CSV [--hosts-file PATH] [--path PATH] [--execute]
+  local81 m2 <classify|plan> --hosts CSV [--hosts-file PATH] [--out DIR] [--format text|json]
   local81 db <doctor|inventory|tools|monitor|diag|backup|report|audit> [options]
   local81 compliance <report|inventory|harden-plan> [options]
   local81 status
@@ -102,6 +104,18 @@ def build_parser() -> argparse.ArgumentParser:
     onboard.add_argument("--type", dest="key_type", default="ed25519", help="Key type for ssh-keygen.")
     onboard.add_argument("--connect-timeout", dest="connect_timeout", type=int, default=5, help="Per-host SSH connect timeout (seconds).")
     onboard.add_argument("--execute", action="store_true", help="Generate/copy keys; without it, plan + read-only sweep only.")
+
+    m2 = sub.add_parser("m2", help="Classify M2 hosts by name and render their read-only stack-discovery plan + fleet catalog.")
+    m2_sub = m2.add_subparsers(dest="m2_command", required=True)
+    m2_classify = m2_sub.add_parser("classify", help="Print the M2 role per host (m2in->postgres, m2or->oracle, m2tr->mq, m2->app).")
+    m2_plan = m2_sub.add_parser("plan", help="Render read-only stack-discovery checks per host; --out writes a fleet catalog + scripts.")
+    for m2_parser in (m2_classify, m2_plan):
+        m2_parser.add_argument("--hosts", default=None, help="Comma-separated hosts/IPs.")
+        m2_parser.add_argument("--hosts-file", dest="hosts_file", default=None, help="File of hosts, one per line.")
+        m2_parser.add_argument("--format", default="text", choices=("text", "json"), help="Output format.")
+    m2_plan.add_argument("--out", default=None, help="Write fleet-m2.yaml + per-host discovery scripts + plan TSV here.")
+    m2_plan.add_argument("--fleet-name", dest="fleet_name", default="m2-fleet", help="Catalog name for --out.")
+    m2_plan.add_argument("--base-port", dest="base_port", type=int, default=2810, help="First placeholder port for the catalog.")
 
     db = sub.add_parser("db", help="Run database readiness, diagnostic, backup-plan, and audit helpers.")
     db_sub = db.add_subparsers(dest="db_command", required=True)
@@ -336,6 +350,8 @@ def main() -> int:
         return run_onboard(hosts=args.hosts, hosts_file=args.hosts_file, path=args.path,
                            key_type=args.key_type, connect_timeout=args.connect_timeout,
                            execute=args.execute, profile=args.profile)
+    if args.command == "m2":
+        return run_m2(args)
     if args.command == "db":
         return run_db(args)
     if args.command == "compliance":
