@@ -24,6 +24,21 @@ from .catalog import (
     SCHEMA_VERSION,
     load_catalog,
 )
+from .m2 import (
+    Check,
+    M2Error,
+    ProbeStep,
+    ROLE_APP,
+    ROLE_MQ,
+    ROLE_ORACLE,
+    ROLE_POSTGRES,
+    classify_host,
+    discovery_checks,
+    discovery_plan,
+    is_m2_host,
+    render_discovery_script,
+    render_m2_catalog,
+)
 
 __all__ = [
     "ActionCategory",
@@ -35,4 +50,18 @@ __all__ = [
     "ServerGroup",
     "SCHEMA_VERSION",
     "load_catalog",
+    # M2 stack onboarding
+    "Check",
+    "M2Error",
+    "ProbeStep",
+    "ROLE_APP",
+    "ROLE_MQ",
+    "ROLE_ORACLE",
+    "ROLE_POSTGRES",
+    "classify_host",
+    "discovery_checks",
+    "discovery_plan",
+    "is_m2_host",
+    "render_discovery_script",
+    "render_m2_catalog",
 ]
