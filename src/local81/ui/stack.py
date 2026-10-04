@@ -339,7 +339,7 @@ _LAUNCHER_HTML = r"""<!doctype html>
 <a class="skip" href="#main">Skip to controls</a>
 <header>
   <div class="brand">
-    <img class="seal" src="assets/local81-emblem.png" alt="Local-81 — Clem the operator, Fully Baked Orchestration, Traverse City Michigan" onerror="this.style.display='none'">
+    <img class="seal" src="assets/local81-emblem.png" alt="Local-81 — orchestration software, Traverse City Michigan" onerror="this.style.display='none'">
     <div class="brand-words">
       <div class="wordmark">LOCAL&#8209;81 <span class="cp">control panel</span></div>
       <div class="tag">Fully baked orchestration &middot; operators hold the line</div>
@@ -348,7 +348,7 @@ _LAUNCHER_HTML = r"""<!doctype html>
   </div>
 </header>
 <div class="hero">
-  <img src="assets/local81-emblem.png" alt="Local-81 — Clem the operator on a Traverse City beachhead" onerror="this.closest('.hero').style.display='none'">
+  <img src="assets/local81-emblem.png" alt="Local-81 — an operator with a laptop on the Traverse City waterfront" onerror="this.closest('.hero').style.display='none'">
 </div>
 <main id="main">
   <details class="about">

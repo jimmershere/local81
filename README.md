@@ -1,5 +1,5 @@
 # Local-81
-![Local 81 — Fully Baked Orchestration. Clem the operator mascot on a Traverse City beachhead. Powered by Portwright.io — Built in Port, Proven at Sea.](docs/assets/local81-emblem.png)
+![Local 81 — Orchestration Software. An operator in a Local 81 cap and tee holds a laptop on the Traverse City waterfront at sunset, beside cherry crates. Locals only.](docs/assets/local81-emblem.png)
 
 [![CI](https://github.com/jimmershere/local81/actions/workflows/ci.yml/badge.svg)](https://github.com/jimmershere/local81/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

@@ -39,7 +39,7 @@ def _write(path: Path, payload: dict) -> None:
     path.chmod(0o600)
 
 
-# Brand assets the launcher uses (the union seal + the Clem emblem). Best-effort:
+# Brand assets the launcher uses (the union seal + the emblem). Best-effort:
 # copied from the source tree's docs/assets if present (editable installs have
 # them), skipped silently otherwise — the launcher degrades gracefully.
 _BRAND_ASSETS = ("local81-logo.svg", "local81-emblem.png")
