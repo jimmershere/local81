@@ -28,16 +28,26 @@ compile:
 	PYTHONPATH=src $(PYTHON) -m compileall -q src
 
 shell-test:
+	@failed=""; \
 	for test_script in $(BASELINE_SHELL_TESTS); do \
 		echo "==> $$test_script"; \
-		bash "$$test_script"; \
-	done
+		bash "$$test_script" || failed="$$failed $$test_script"; \
+	done; \
+	if [ -n "$$failed" ]; then \
+		echo "FAILED shell tests:$$failed" >&2; \
+		exit 1; \
+	fi
 
 full-shell-test:
+	@failed=""; \
 	for test_script in $(ALL_SHELL_TESTS); do \
 		echo "==> $$test_script"; \
-		bash "$$test_script"; \
-	done
+		bash "$$test_script" || failed="$$failed $$test_script"; \
+	done; \
+	if [ -n "$$failed" ]; then \
+		echo "FAILED shell tests:$$failed" >&2; \
+		exit 1; \
+	fi
 
 python-test:
 	PYTHONPATH=src $(PYTHON) -m pytest -q
