@@ -14,7 +14,6 @@ GENERATED_PATTERNS = (
     "__pycache__/*",
     "*.pyc",
     "*.egg-info/*",
-    "tools/SF-*.b64.txt",
     "build/*",
     "dist/*",
     "packaging/rpm/*.rpm",

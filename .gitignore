@@ -17,7 +17,6 @@ dist/
 .brv/
 *.egg-info/
 test-env/
-tools/SF-*.b64.txt
 packaging/rpm/*.rpm
 packaging/rpm/rpmbuild/
 packaging/deb/.debbuild/
