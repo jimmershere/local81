@@ -22,7 +22,7 @@ def scan_access_policy() -> list[ComplianceFinding]:
                 severity=rule.severity if finding.level != "PASS" else "info",
                 category=rule.category,
                 subject=finding.control,
-                message=finding.detail,
+                message=f"{finding.control}: {finding.detail}",
                 controls=list(rule.controls),
                 evidence=[finding.render()],
                 remediation=rule.remediation,

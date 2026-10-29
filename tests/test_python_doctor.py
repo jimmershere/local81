@@ -57,6 +57,18 @@ service_ref = bao://secret/prod/db#password
     assert "1 managed" in results[0].detail
 
 
+def test_secrets_checks_reports_unparseable_config(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    local81 = tmp_path / ".local81"
+    local81.mkdir()
+    (local81 / "config.ini").write_text("[scope \"web\"]\na = 1\n[scope \"web\"]\na = 2\n", encoding="utf-8")
+    results = _secrets_checks()
+    assert len(results) == 1
+    assert results[0].name == "secrets:refs"
+    assert results[0].level == "FAIL"
+    assert "could not parse" in results[0].detail
+
+
 def test_run_doctor_warns_for_missing_project_dirs(tmp_path: Path, monkeypatch, capsys) -> None:
     monkeypatch.chdir(tmp_path)
     rc = run_doctor()

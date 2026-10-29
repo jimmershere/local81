@@ -125,7 +125,10 @@ def _normalize_target(name: str, values: dict[str, Any]) -> DatabaseTarget:
 def _load_ini_targets(path: Path) -> list[DatabaseTarget]:
     parser = configparser.ConfigParser(interpolation=None, strict=True)
     parser.optionxform = str
-    parser.read(path, encoding="utf-8")
+    try:
+        parser.read(path, encoding="utf-8")
+    except configparser.Error as exc:
+        raise DatabaseConfigError(f"could not parse {path}: {exc}") from exc
     targets: list[DatabaseTarget] = []
     for section in parser.sections():
         match = _DATABASE_SECTION_RE.match(section)
