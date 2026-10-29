@@ -23,8 +23,7 @@ def _iter_hosts(hosts_csv: str) -> list[str]:
 
 def run_pull_logs(*, settings: str = "./settings.cfg", hosts: str | None = None,
                   dest: str | None = None, jboss_path: str | None = None,
-                  apache_path: str | None = None, engin_path: str | None = None,
-                  smartxfr_path: str | None = None) -> int:
+                  apache_path: str | None = None) -> int:
     settings_path = Path(settings)
     settings_data: dict[str, str] = {}
     if settings_path.is_file():
@@ -36,8 +35,6 @@ def run_pull_logs(*, settings: str = "./settings.cfg", hosts: str | None = None,
     component_paths = {
         "jboss": jboss_path if jboss_path is not None else settings_data.get("jboss_log_path", ""),
         "apache": apache_path if apache_path is not None else settings_data.get("apache_log_path", ""),
-        "engin": engin_path if engin_path is not None else settings_data.get("engin_log_path", ""),
-        "smartxfr": smartxfr_path if smartxfr_path is not None else settings_data.get("smartxfr_log_path", ""),
     }
 
     if not hosts_csv:
@@ -45,7 +42,7 @@ def run_pull_logs(*, settings: str = "./settings.cfg", hosts: str | None = None,
         return 1
 
     if not any(path for path in component_paths.values()):
-        print("local81: no log paths configured; define jboss/apache/engin/smartxfr paths in settings.cfg or on command line", file=sys.stderr)
+        print("local81: no log paths configured; define jboss/apache paths in settings.cfg or on command line", file=sys.stderr)
         return 1
 
     dest_dir.mkdir(parents=True, exist_ok=True)

@@ -104,8 +104,6 @@ _INI_ALLOWED_KEYS = {
         "log_dest_dir",
         "jboss_log_path",
         "apache_log_path",
-        "engin_log_path",
-        "smartxfr_log_path",
     },
     "routing": {
         "env_from_filename_prefix",
@@ -209,8 +207,6 @@ _DEFAULTS_REQUIRED_KEYS = {
     "log_dest_dir",
     "jboss_log_path",
     "apache_log_path",
-    "engin_log_path",
-    "smartxfr_log_path",
 }
 _ROUTING_REQUIRED_KEYS = {
     "env_from_filename_prefix",

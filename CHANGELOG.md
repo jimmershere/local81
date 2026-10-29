@@ -51,4 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrected residual references to the project's former working name in docs and the logo seal to `LOCAL-81`.
 
 ### Removed
+- `pull-logs` options `--engin-path` and `--smartxfr-path`, and the `engin_log_path` /
+  `smartxfr_log_path` config keys. Delete those two keys from existing
+  `.local81/config.ini` files; unknown keys fail config validation.
+- `examples/legacy-settings.cfg.example`.
 - Stray repo-root files (`floor2.txt`, `sf-integration-notes.md`, `.gitkeep`).

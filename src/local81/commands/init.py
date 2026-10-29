@@ -260,8 +260,6 @@ def run_init(*, import_path: str | None = None, force: bool = False, project: st
         'log_dest_dir = .local81/pulled-logs',
         'jboss_log_path = ',
         'apache_log_path = ',
-        'engin_log_path = ',
-        'smartxfr_log_path = ',
         '',
         '[routing]',
         'env_from_filename_prefix = s:sys,q:qa,p:production',

@@ -62,7 +62,6 @@ When command behavior changes, review these files together:
 ## Examples and fit
 Before adding a feature, read:
 - `docs/when-to-use-local81.md`
-- `examples/legacy-settings.cfg.example`
 - `examples/profile-prod.yaml`
 
 ## Suggested contribution flow

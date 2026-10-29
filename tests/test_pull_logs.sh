@@ -14,8 +14,6 @@ log_hosts = app1,app2
 log_dest_dir = ./collected
 jboss_log_path = /var/log/jboss/server.log
 apache_log_path = /var/log/httpd/access.log
-engin_log_path =
-smartxfr_log_path = /var/log/smartxfr/current.log
 CFG
 
   mkdir -p "${tmpdir}/stubs"
@@ -34,10 +32,9 @@ SCP
     PATH="${tmpdir}/stubs:$PATH" "$repo_root/bin/local81" pull-logs --settings "${tmpdir}/settings.cfg" >"${tmpdir}/out.txt"
   )
 
-  grep -q 'Pulled logs to ./collected (success=6, failed=0)' "${tmpdir}/out.txt"
+  grep -q 'Pulled logs to ./collected (success=4, failed=0)' "${tmpdir}/out.txt"
   [ -f "${tmpdir}/collected/app1/jboss/app1__var_log_jboss_server.log" ]
   [ -f "${tmpdir}/collected/app1/apache/app1__var_log_httpd_access.log" ]
-  [ -f "${tmpdir}/collected/app1/smartxfr/app1__var_log_smartxfr_current.log" ]
   [ -f "${tmpdir}/collected/app2/jboss/app2__var_log_jboss_server.log" ]
 }
 

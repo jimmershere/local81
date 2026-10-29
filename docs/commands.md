@@ -246,8 +246,6 @@ Collects remote application logs into a local destination folder.
 | `--dest PATH` | Local destination directory |
 | `--jboss-path PATH` | Override JBoss log path |
 | `--apache-path PATH` | Override Apache log path |
-| `--engin-path PATH` | Override Engin log path |
-| `--smartxfr-path PATH` | Override SmartXfr log path |
 
 After collection, `pull-logs` writes a Merkle integrity manifest
 (`.local81-integrity.json`) over the pulled tree and scans every file for

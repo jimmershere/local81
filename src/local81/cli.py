@@ -204,8 +204,6 @@ def build_parser() -> argparse.ArgumentParser:
     pull_logs.add_argument("--dest", default=None)
     pull_logs.add_argument("--jboss-path", default=None)
     pull_logs.add_argument("--apache-path", default=None)
-    pull_logs.add_argument("--engin-path", default=None)
-    pull_logs.add_argument("--smartxfr-path", default=None)
 
     diag = sub.add_parser("diag", help="Plan or run remote diagnostics.")
     diag.add_argument("--project", default=None)
@@ -366,8 +364,7 @@ def main() -> int:
         return run_history(limit=args.limit)
     if args.command == "pull-logs":
         return run_pull_logs(settings=args.settings, hosts=args.hosts, dest=args.dest,
-                             jboss_path=args.jboss_path, apache_path=args.apache_path,
-                             engin_path=args.engin_path, smartxfr_path=args.smartxfr_path)
+                             jboss_path=args.jboss_path, apache_path=args.apache_path)
     if args.command == "diag":
         return run_diag(project=args.project, hosts=args.hosts, diag_type=args.diag_type,
                         pid=args.pid, duration=args.duration, remote_cmd=args.remote_cmd,

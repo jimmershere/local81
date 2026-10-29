@@ -59,8 +59,6 @@ The runtime loader remains compatibility-oriented for older configs, but product
 | `log_dest_dir` | path | yes | `.local81/pulled-logs` | Local destination for pulled diagnostics. |
 | `jboss_log_path` | path | yes | empty | Remote JBoss log path or glob for `pull-logs`. |
 | `apache_log_path` | path | yes | empty | Remote Apache log path or glob for `pull-logs`. |
-| `engin_log_path` | path | yes | empty | Remote Engin log path or glob for `pull-logs`. |
-| `smartxfr_log_path` | path | yes | empty | Remote SmartXFR log path or glob for `pull-logs`. |
 
 ### `[routing]` (required)
 
@@ -240,7 +238,7 @@ Legacy known keys:
 
 - Required per section: `source_dir`, `target_dir`, `servers`
 - Optional per section: `rsync_opts`, `backup`, `backup_suffix`
-- Optional global keys (outside sections): `log_hosts`, `log_dest_dir`, `jboss_log_path`, `apache_log_path`, `engin_log_path`, `smartxfr_log_path`
+- Optional global keys (outside sections): `log_hosts`, `log_dest_dir`, `jboss_log_path`, `apache_log_path`
 
 Unknown legacy keys are ignored with a warning (one warning per unknown key name).
 
