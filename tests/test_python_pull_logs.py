@@ -13,8 +13,6 @@ def _write_settings(tmp_path: Path) -> Path:
             "log_dest_dir = ./collected",
             "jboss_log_path = /var/log/jboss/server.log",
             "apache_log_path = /var/log/httpd/access.log",
-            "engin_log_path =",
-            "smartxfr_log_path = /var/log/smartxfr/current.log",
             "",
         ]),
         encoding="utf-8",
@@ -26,7 +24,7 @@ def test_load_settings(tmp_path: Path) -> None:
     settings_path = _write_settings(tmp_path)
     data = _load_settings(settings_path)
     assert data["log_hosts"] == "app1,app2"
-    assert data["engin_log_path"] == ""
+    assert data["apache_log_path"] == "/var/log/httpd/access.log"
 
 
 def test_run_pull_logs_reads_settings_and_invokes_scp(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -52,10 +50,10 @@ def test_run_pull_logs_reads_settings_and_invokes_scp(tmp_path: Path, monkeypatc
 
     out = capsys.readouterr().out
     assert rc == 0
-    assert len(calls) == 6
+    assert len(calls) == 4
     assert calls[0] == ["scp", "-q", "-r", "app1:/var/log/jboss/server.log", "collected/app1/jboss/"]
-    assert calls[-1] == ["scp", "-q", "-r", "app2:/var/log/smartxfr/current.log", "collected/app2/smartxfr/"]
-    assert "Pulled logs to ./collected (success=6, failed=0)" in out
+    assert calls[-1] == ["scp", "-q", "-r", "app2:/var/log/httpd/access.log", "collected/app2/apache/"]
+    assert "Pulled logs to ./collected (success=4, failed=0)" in out
 
 
 def test_run_pull_logs_honors_cli_overrides(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -100,8 +98,6 @@ def test_cli_pull_logs_command() -> None:
         "--dest", "./logs",
         "--jboss-path", "/tmp/jboss.log",
         "--apache-path", "/tmp/apache.log",
-        "--engin-path", "/tmp/engin.log",
-        "--smartxfr-path", "/tmp/smartxfr.log",
     ])
     assert args.command == "pull-logs"
     assert args.settings == "./settings.cfg"
@@ -109,5 +105,3 @@ def test_cli_pull_logs_command() -> None:
     assert args.dest == "./logs"
     assert args.jboss_path == "/tmp/jboss.log"
     assert args.apache_path == "/tmp/apache.log"
-    assert args.engin_path == "/tmp/engin.log"
-    assert args.smartxfr_path == "/tmp/smartxfr.log"

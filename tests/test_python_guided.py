@@ -219,8 +219,6 @@ def test_interview_custom_values(tmp_path):
         "y",                     # want log paths
         "/var/log/jboss",        # jboss
         "/var/log/apache",       # apache
-        "",                      # engin
-        "",                      # smartxfr
     ])
     out = io.StringIO()
     original = os.getcwd()

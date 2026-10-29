@@ -426,8 +426,6 @@ def test_check_warns_for_stale_config_fingerprint(tmp_path: Path, monkeypatch, c
         "log_dest_dir = .local81/pulled-logs\n"
         "jboss_log_path =\n"
         "apache_log_path =\n"
-        "engin_log_path =\n"
-        "smartxfr_log_path =\n"
         "\n"
         "[routing]\n"
         "env_from_filename_prefix = s:sys,q:qa,p:production\n"

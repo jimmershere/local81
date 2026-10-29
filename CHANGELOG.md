@@ -8,16 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `local81 m2` command and `local81.recipes.m2` module: read-only onboarding for
-  the M2 JBoss/Oracle/PostgreSQL/MQ stack. Classifies any host by name marker
-  (`m2in`->PostgreSQL 17, `m2or`->Oracle, `m2tr`->IBM MQ, `m2`->JBoss/Java app;
-  non-`m2` names fail closed), then renders each host's read-only stack-discovery
-  checks — where the stack lives (`/var/www/html/vhosts`, the Java client under
-  `/app`, the Oracle client under `/opt`, `$JBOSS_HOME/standalone/`, `/props`,
-  `engin/palmed`, `smartxfr`, and the role-specific DB/queue paths, services,
-  packages, and `.xml`/`.properties` config). `m2 classify` prints roles;
-  `m2 plan [--out DIR]` emits the probe plan, a per-host discovery shell report,
-  and a validated `local81.recipes.v1` fleet catalog (`examples/recipes/m2/`).
 - `LICENSE` (MIT) and `license` metadata in `pyproject.toml`.
 - `SECURITY.md` security policy and this `CHANGELOG.md`.
 - CI matrix across Python 3.12 and 3.13.
@@ -61,4 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrected residual references to the project's former working name in docs and the logo seal to `LOCAL-81`.
 
 ### Removed
+- `pull-logs` options `--engin-path` and `--smartxfr-path`, and the `engin_log_path` /
+  `smartxfr_log_path` config keys. Delete those two keys from existing
+  `.local81/config.ini` files; unknown keys fail config validation.
+- `examples/legacy-settings.cfg.example`.
 - Stray repo-root files (`floor2.txt`, `sf-integration-notes.md`, `.gitkeep`).

@@ -133,7 +133,6 @@ Start here if another tech needs to pick it up quickly:
 - `docs/troubleshooting.md`
 - `docs/guided-setup.md`
 - `docs/when-to-use-local81.md`
-- `examples/legacy-settings.cfg.example`
 - `examples/profile-prod.yaml`
 - `CONTRIBUTING.md`
 

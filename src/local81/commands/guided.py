@@ -25,8 +25,6 @@ class GuidedAnswers:
     log_hosts: str = ""
     jboss_log_path: str = ""
     apache_log_path: str = ""
-    engin_log_path: str = ""
-    smartxfr_log_path: str = ""
 
 
 def _section(title: str, subtitle: str | None = None, *, out: TextIO = sys.stdout) -> None:
@@ -120,8 +118,6 @@ def _build_config_payload(answers: GuidedAnswers) -> dict[str, Any]:
             "log_dest_dir": ".local81/pulled-logs",
             "jboss_log_path": answers.jboss_log_path,
             "apache_log_path": answers.apache_log_path,
-            "engin_log_path": answers.engin_log_path,
-            "smartxfr_log_path": answers.smartxfr_log_path,
         },
         "routing": {
             "env_from_filename_prefix": "s:sys,q:qa,p:production",
@@ -217,8 +213,6 @@ def run_guided_interview(*, inp: IO[str] = sys.stdin, out: TextIO = sys.stdout) 
         if want_paths:
             answers.jboss_log_path = _prompt("JBoss log path", inp=inp, out=out)
             answers.apache_log_path = _prompt("Apache log path", inp=inp, out=out)
-            answers.engin_log_path = _prompt("Engin log path", inp=inp, out=out)
-            answers.smartxfr_log_path = _prompt("SmartXFR log path", inp=inp, out=out)
     else:
         out.write("No problem. We can leave logs for later.\n")
 
@@ -269,8 +263,6 @@ def generate_config(answers: GuidedAnswers) -> str:
         f"log_dest_dir = {defaults['log_dest_dir']}",
         f"jboss_log_path = {defaults['jboss_log_path']}",
         f"apache_log_path = {defaults['apache_log_path']}",
-        f"engin_log_path = {defaults['engin_log_path']}",
-        f"smartxfr_log_path = {defaults['smartxfr_log_path']}",
         "",
         "[routing]",
         f"env_from_filename_prefix = {routing['env_from_filename_prefix']}",
